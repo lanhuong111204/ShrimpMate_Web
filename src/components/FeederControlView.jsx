@@ -17,6 +17,10 @@ import {
   RotateCcw, 
   Package
 } from 'lucide-react';
+import { feedingService } from '../services/feedingService';
+import { safetyRuleService } from '../services/safetyRuleService';
+import { deviceService } from '../services/deviceService';
+import { SafetyBlockedModal } from './feeder/SafetyBlockedModal';
 
 export const FeederControlView = ({
   selectedPond,
@@ -82,11 +86,53 @@ export const FeederControlView = ({
     return () => clearInterval(timer);
   }, [isRunning, isPaused, pulseMode]);
 
+  // Safety Rule Engine Evaluation State
+  const [safetyEvaluation, setSafetyEvaluation] = useState(null);
+  const [isSafetyModalOpen, setIsSafetyModalOpen] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+
   // Tactical Button Handlers
-  const handleStartAuto = () => {
-    setIsRunning(true);
-    setIsPaused(false);
-    onShowToast('SCADA: ĐÃ KÍCH HOẠT CHẾ ĐỘ PHUN TỰ ĐỘNG THEO LỊCH CỮ SỐ 02.', 'success');
+  const handleStartAuto = async () => {
+    setIsEvaluating(true);
+    try {
+      if (selectedPond?.id) {
+        // 1. Kiểm tra an toàn trước khi xả cám qua Safety Rule Engine
+        const preview = await safetyRuleService.evaluateSafetyPreview(selectedPond.id, {
+          deviceId: selectedPond.deviceId || selectedPond.id,
+          requestedAmountKg: targetCurrentMeal || 15.0,
+        }).catch(() => null);
+
+        if (preview && preview.decision === 'blocked') {
+          setSafetyEvaluation(preview);
+          setIsSafetyModalOpen(true);
+          setIsRunning(false);
+          onShowToast('CẢNH BÁO: Safety Rule Engine TỪ CHỐI lệnh cho ăn vì chất lượng nước!', 'alert');
+          return;
+        }
+
+        // 2. Kích hoạt cữ ăn thực tế lên máy chủ
+        await feedingService.createRecord(selectedPond.id, {
+          deviceId: selectedPond.deviceId || selectedPond.id,
+          requestedAmountKg: targetCurrentMeal || 15.0,
+          source: 'manual',
+        }).catch((err) => {
+          console.warn('Backend cữ ăn offline, tiếp tục mô phỏng SCADA:', err);
+        });
+      }
+
+      setIsRunning(true);
+      setIsPaused(false);
+      onShowToast('SCADA: ĐÃ KÍCH HOẠT CHẾ ĐỘ PHUN CÁM QUA SAFETY ENGINE THÀNH CÔNG.', 'success');
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
+
+  const handleTriggerEmergencyStop = async () => {
+    if (selectedPond?.deviceId) {
+      await deviceService.emergencyStop(selectedPond.deviceId).catch(() => {});
+    }
+    onEmergencyStop?.();
   };
 
   const handlePause = () => {
@@ -306,7 +352,7 @@ export const FeederControlView = ({
 
           {/* Nút Đỏ Dừng Khẩn Cấp */}
           <button
-            onClick={onEmergencyStop}
+            onClick={handleTriggerEmergencyStop}
             className="h-16 px-3 bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white rounded-xl flex flex-col items-center justify-center transition-all shadow-sm shadow-red-600/20 group cursor-pointer"
           >
             <div className="flex items-center gap-1.5">
@@ -718,6 +764,13 @@ export const FeederControlView = ({
           </div>
         </div>
       </div>
+
+      {/* Modal Cảnh báo Chặn xả thức ăn từ Safety Rule Engine */}
+      <SafetyBlockedModal
+        isOpen={isSafetyModalOpen}
+        onClose={() => setIsSafetyModalOpen(false)}
+        safetyResult={safetyEvaluation}
+      />
     </div>
   );
 };

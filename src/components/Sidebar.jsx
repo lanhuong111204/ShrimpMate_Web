@@ -2,6 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, 
   Waves, 
+  Users,
   Settings2, 
   Clock, 
   Activity, 
@@ -35,7 +36,7 @@ export const Sidebar = ({
           <span>Bàn Tổng Quan</span>
         </button>
 
-        {/* 2. Quản Lý 4 Ao */}
+        {/* 2. Quản Lý Trang Trại & Ao Nuôi (UC005, UC006) */}
         <button
           onClick={() => onSelectTab('ponds')}
           className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
@@ -46,7 +47,7 @@ export const Sidebar = ({
         >
           <div className="flex items-center gap-2.5">
             <Waves className="w-4 h-4 shrink-0" />
-            <span>Quản Lý 4 Ao</span>
+            <span>Trang Trại & Ao Nuôi</span>
           </div>
           <span
             className={`font-mono-num text-[10px] font-semibold px-1.5 py-0.5 rounded ${
@@ -57,7 +58,20 @@ export const Sidebar = ({
           </span>
         </button>
 
-        {/* 3. Điều Khiển Máy Ăn */}
+        {/* 3. Quản Lý Người Nuôi & Phân Công (UC020, UC021) */}
+        <button
+          onClick={() => onSelectTab('farmers')}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
+            currentTab === 'farmers'
+              ? 'bg-neutral-900 text-white shadow-sm font-semibold'
+              : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
+          }`}
+        >
+          <Users className="w-4 h-4 shrink-0" />
+          <span>Quản Lý Người Nuôi</span>
+        </button>
+
+        {/* 4. Điều Khiển Máy Ăn */}
         <button
           onClick={() => onSelectTab('feeder')}
           className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
@@ -76,7 +90,7 @@ export const Sidebar = ({
           />
         </button>
 
-        {/* 4. Lên Lịch Ăn Cữ */}
+        {/* 5. Lên Lịch Ăn Cữ */}
         <button
           onClick={() => onSelectTab('schedule')}
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
@@ -89,24 +103,24 @@ export const Sidebar = ({
           <span>Lên Lịch Ăn Cữ</span>
         </button>
 
-        {/* 5. AI Bio-Acoustic */}
+        {/* 6. AI Camera & Bắt Mồi FIS (UC014, UC019) */}
         <button
-          onClick={() => onSelectTab('acoustics')}
+          onClick={() => onSelectTab('camera-fis')}
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-            currentTab === 'acoustics'
+            currentTab === 'camera-fis' || currentTab === 'acoustics'
               ? 'bg-neutral-900 text-white shadow-sm font-semibold'
               : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
           }`}
         >
-          <Activity className="w-4 h-4 shrink-0" />
-          <span>AI Bio-Acoustic</span>
+          <Activity className="w-4 h-4 shrink-0 text-emerald-400" />
+          <span>AI Camera & Bắt Mồi FIS</span>
         </button>
 
         <div className="pt-4 px-2.5 py-1 text-[10px] font-mono-num font-semibold uppercase text-neutral-400 tracking-wider">
           Hạ Tầng Kỹ Thuật
         </div>
 
-        {/* 6. Cài Đặt Trạm IoT */}
+        {/* 7. Cài Đặt Trạm IoT */}
         <button
           onClick={() => onSelectTab('iot')}
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
@@ -119,7 +133,7 @@ export const Sidebar = ({
           <span>Cài Đặt Trạm IoT</span>
         </button>
 
-        {/* 7. Nhật Ký SCADA */}
+        {/* 8. Nhật Ký SCADA */}
         <button
           onClick={() => onSelectTab('logs')}
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
@@ -157,3 +171,5 @@ export const Sidebar = ({
     </aside>
   );
 };
+
+export default Sidebar;

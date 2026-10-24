@@ -6,17 +6,27 @@ import {
   INITIAL_SAFETY_RULES, 
   INITIAL_LOGS 
 } from './data/mockData';
+import { AuthProvider } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { RoleRoute } from './components/common/RoleRoute';
+import { UnauthorizedView } from './components/common/UnauthorizedView';
+import AdminLayout from './components/admin/AdminLayout';
+import { LoginPage } from './pages/auth/LoginPage';
+import { RegisterPage } from './pages/auth/RegisterPage';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
 import { ScheduleView } from './components/ScheduleView';
 import { FeederControlView } from './components/FeederControlView';
 import { PondsManagementView } from './components/PondsManagementView';
+import { FarmersManagementView } from './components/FarmersManagementView';
+import { CameraFisView } from './components/CameraFisView';
 import { BioAcousticsView } from './components/BioAcousticsView';
 import { ScadaLogsView } from './components/ScadaLogsView';
 import { IoTStationView } from './components/IoTStationView';
 import { EStopModal } from './components/EStopModal';
 import { Toast } from './components/Toast';
+import { deviceService } from './services/deviceService';
 
 const SCADAAppContent = () => {
   const navigate = useNavigate();
@@ -27,12 +37,15 @@ const SCADAAppContent = () => {
     switch (pathname) {
       case '/ponds':
         return 'ponds';
+      case '/farmers':
+        return 'farmers';
       case '/feeder':
         return 'feeder';
       case '/schedule':
         return 'schedule';
+      case '/camera-fis':
       case '/acoustics':
-        return 'acoustics';
+        return 'camera-fis';
       case '/iot':
         return 'iot';
       case '/logs':
@@ -101,8 +114,16 @@ const SCADAAppContent = () => {
   };
 
   // E-STOP Trigger
-  const handleEmergencyStop = () => {
+  const handleEmergencyStop = async () => {
     setIsEStopActive(true);
+    // Gửi lệnh ngắt khẩn cấp phần cứng qua Backend API & MQTT
+    try {
+      if (activePond?.deviceId || activePond?.id) {
+        await deviceService.emergencyStop(activePond.deviceId || activePond.id).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('Lỗi gửi API E-Stop:', err);
+    }
     // Pause or alert all ponds
     setPonds((prev) =>
       prev.map((p) => ({
@@ -273,6 +294,10 @@ const SCADAAppContent = () => {
               }
             />
             <Route
+              path="/farmers"
+              element={<FarmersManagementView />}
+            />
+            <Route
               path="/feeder"
               element={
                 <FeederControlView
@@ -297,7 +322,8 @@ const SCADAAppContent = () => {
                 />
               }
             />
-            <Route path="/acoustics" element={<BioAcousticsView />} />
+            <Route path="/camera-fis" element={<CameraFisView />} />
+            <Route path="/acoustics" element={<CameraFisView />} />
             <Route
               path="/logs"
               element={
@@ -330,7 +356,11 @@ const SCADAAppContent = () => {
       </div>
 
       {/* E-Stop Modal */}
-      <EStopModal isOpen={isEStopActive} onReset={handleResetEStop} />
+      <EStopModal 
+        isOpen={isEStopActive} 
+        onReset={handleResetEStop} 
+        activeDeviceId={activePond?.deviceId || activePond?.id}
+      />
 
       {/* Floating System Toast */}
       <Toast
@@ -345,7 +375,36 @@ const SCADAAppContent = () => {
 function App() {
   return (
     <BrowserRouter>
-      <SCADAAppContent />
+      <AuthProvider>
+        <Routes>
+          {/* Public Auth Routes */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/unauthorized" element={<UnauthorizedView />} />
+
+          {/* Root Admin Platform Dashboard (Chỉ dành riêng cho admin) */}
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute>
+                <RoleRoute allowedRoles={['admin']}>
+                  <AdminLayout />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected SCADA Application Zone */}
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <SCADAAppContent />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

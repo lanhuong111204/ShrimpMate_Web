@@ -36,11 +36,11 @@ export const FeederControlView = ({
   const [speedBoost, setSpeedBoost] = useState(false);
 
   // Loadcell & Frequency State
-  const [hopperWeight, setHopperWeight] = useState(selectedPond?.hopperKg || 35.0);
-  const maxHopperWeight = selectedPond?.maxHopperKg || 50.0;
+  const [hopperWeight, setHopperWeight] = useState(selectedPond?.hopperKg || 58.0);
+  const maxHopperWeight = selectedPond?.maxHopperKg || 70.0;
   const [vfdFrequency, setVfdFrequency] = useState(45.0);
-  const [sprayedInCurrentMeal, setSprayedInCurrentMeal] = useState(selectedPond?.sprayedKg || 16.0);
-  const targetCurrentMeal = selectedPond?.targetKg || 22.0;
+  const [sprayedInCurrentMeal, setSprayedInCurrentMeal] = useState(selectedPond?.sprayedKg || 40.5);
+  const targetCurrentMeal = selectedPond?.targetKg || 45.0;
 
   // Pulse mechanism countdown
   const [restCountdown, setRestCountdown] = useState(14);
@@ -190,272 +190,346 @@ export const FeederControlView = ({
     onShowToast(`Đã chuyển tần số biến tần VFD sang ${freq} Hz.`, 'info');
   };
 
+  // Big Circular Feeder Progress Ring math (r = 78, circumference = 2 * PI * 78 = 490)
+  const feedPct = Math.min(100, Math.round((sprayedInCurrentMeal / (targetCurrentMeal || 1)) * 100));
+  const bigCircumference = 490;
+  const bigOffset = bigCircumference - (feedPct / 100) * bigCircumference;
+  const hopperPct = Math.min(100, Math.round((hopperWeight / (maxHopperWeight || 1)) * 100));
+
   return (
-    <div className="space-y-6">
-      {/* 1. PAGE HEADER */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-            <span>Hệ thống ao nuôi</span>
-            <span>/</span>
-            <span className="text-slate-700 font-medium">{selectedPond?.name || 'Ao số 02'}</span>
-            <span>/</span>
-            <span className="text-slate-900 font-semibold">
-              Máy cho ăn ({selectedPond?.code || 'AO-02'})
-            </span>
+    <div className="space-y-5">
+      {/* 1. MOBILE SAFETY RULE ENGINE INTERLOCK BANNER */}
+      <div className="rounded-2xl p-4 bg-[#E8F5E9] border border-[#7CF994] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#006E2D] text-white flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-5 h-5" />
           </div>
-
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
-              Điều khiển & Giám sát máy cho ăn
-            </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Tự động theo lịch
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 flex-wrap text-xs font-mono-num">
-          <div className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 flex items-center gap-2">
-            <span className="text-slate-500">Đồng hồ tủ máy:</span>
-            <span className="font-semibold text-slate-800">{currentTime}</span>
-          </div>
-          <div className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 flex items-center gap-2">
-            <span className="text-slate-500">Cữ hiện tại:</span>
-            <span className="font-semibold text-slate-800">Cữ 2 (10:30 - 11:30)</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. CONTROL ACTION TOOLBAR */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-slate-500" />
-            <h2 className="text-sm font-semibold text-slate-900">
-              Bảng điều khiển trực tiếp thiết bị
-            </h2>
-          </div>
-          <span className="text-xs text-slate-500">
-            Có kiểm tra khóa an toàn môi trường trước khi chạy
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {/* Bắt đầu chạy */}
-          <button
-            onClick={handleStartAuto}
-            className="h-14 px-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl flex flex-col items-center justify-center transition cursor-pointer"
-          >
-            <div className="flex items-center gap-1.5">
-              <Play className="w-4 h-4 fill-white" />
-              <span className="font-semibold text-xs">Bắt đầu chạy</span>
-            </div>
-            <span className="text-[11px] text-teal-100 mt-0.5">Chế độ tự động</span>
-          </button>
-
-          {/* Tạm dừng */}
-          <button
-            onClick={handlePause}
-            className={`h-14 px-3 rounded-xl flex flex-col items-center justify-center border transition cursor-pointer ${
-              isPaused
-                ? 'bg-amber-500 text-white border-amber-600'
-                : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <Pause className={`w-4 h-4 ${isPaused ? 'text-white' : 'text-slate-500'}`} />
-              <span className="font-semibold text-xs">{isPaused ? 'Tiếp tục' : 'Tạm dừng'}</span>
-            </div>
-            <span className={`text-[11px] mt-0.5 ${isPaused ? 'text-amber-100' : 'text-slate-500'}`}>
-              Thăm nhá (10 phút)
-            </span>
-          </button>
-
-          {/* Phun thử 10s */}
-          <button
-            onClick={handleTest10s}
-            disabled={isTestSpinning}
-            className={`h-14 px-3 rounded-xl flex flex-col items-center justify-center border transition cursor-pointer ${
-              isTestSpinning
-                ? 'bg-blue-50 border-blue-300 text-blue-900'
-                : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <Timer className={`w-4 h-4 ${isTestSpinning ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
-              <span className="font-semibold text-xs">
-                {isTestSpinning ? `Đang thử (${testCountdown}s)` : 'Phun thử 10s'}
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-[#006E2D]">
+                SAFETY RULE ENGINE: ALLOWED
+              </span>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white text-[#006E2D] border border-[#7CF994]">
+                Đang kiểm tra thời gian thực
               </span>
             </div>
-            <span className="text-[11px] text-slate-500 mt-0.5">Kiểm tra mâm</span>
-          </button>
-
-          {/* Phun bù +2kg */}
-          <button
-            onClick={handleAdd2Kg}
-            className="h-14 px-3 bg-white hover:bg-slate-50 text-slate-800 rounded-xl flex flex-col items-center justify-center border border-slate-200 transition cursor-pointer"
-          >
-            <div className="flex items-center gap-1.5">
-              <PlusSquare className="w-4 h-4 text-slate-500" />
-              <span className="font-semibold text-xs">Phun bù +2kg</span>
-            </div>
-            <span className="text-[11px] text-slate-500 mt-0.5">Bổ sung cữ ăn</span>
-          </button>
-
-          {/* Đảo chiều mâm */}
-          <button
-            onClick={handleReverseMotor}
-            disabled={isReversing}
-            className={`h-14 px-3 rounded-xl flex flex-col items-center justify-center border transition cursor-pointer ${
-              isReversing
-                ? 'bg-amber-50 text-amber-900 border-amber-300'
-                : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <RotateCw className={`w-4 h-4 ${isReversing ? 'animate-spin text-amber-700' : 'text-slate-500'}`} />
-              <span className="font-semibold text-xs">{isReversing ? 'Đang đảo...' : 'Đảo chiều mâm'}</span>
-            </div>
-            <span className="text-[11px] text-slate-500 mt-0.5">Chống kẹt cám</span>
-          </button>
-
-          {/* Dừng khẩn cấp */}
-          <button
-            onClick={handleTriggerEmergencyStop}
-            className="h-14 px-3 bg-red-600 hover:bg-red-700 text-white rounded-xl flex flex-col items-center justify-center transition cursor-pointer"
-          >
-            <div className="flex items-center gap-1.5">
-              <AlertOctagon className="w-4 h-4" />
-              <span className="font-semibold text-xs">Dừng khẩn cấp</span>
-            </div>
-            <span className="text-[11px] text-red-100 mt-0.5">Ngắt rơ-le tức thì</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 3. WATER QUALITY SAFETY INTERLOCK */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-slate-500" />
-            <h2 className="text-sm font-semibold text-slate-900">
-              Khóa liên động an toàn môi trường nước
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">Trạng thái:</span>
-            <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-medium flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Cho phép rải cám
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* DO Box */}
-          <div className="p-4 bg-slate-50/70 rounded-xl border border-slate-200/80 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-              <span>Oxy hòa tan (DO)</span>
-              <span className="text-emerald-600 font-medium">Đạt chuẩn</span>
-            </div>
-            <div className="flex items-baseline gap-1.5 my-2">
-              <span className="text-2xl font-bold font-mono-num tracking-tight text-slate-900">
-                {selectedPond?.do ? selectedPond.do.toFixed(2) : '5.50'}
-              </span>
-              <span className="font-mono-num text-xs text-slate-500">mg/L</span>
-            </div>
-            <div className="text-xs text-slate-500 border-t border-slate-200/60 pt-2 flex items-center justify-between">
-              <span>Ngưỡng ngắt tự động:</span>
-              <span className="font-mono-num font-semibold text-slate-700">&lt; 4.0 mg/L</span>
-            </div>
-          </div>
-
-          {/* Nhiệt độ nước */}
-          <div className="p-4 bg-slate-50/70 rounded-xl border border-slate-200/80 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-              <span>Nhiệt độ nước ao</span>
-              <span className="text-emerald-600 font-medium">Ổn định</span>
-            </div>
-            <div className="flex items-baseline gap-1.5 my-2">
-              <span className="text-2xl font-bold font-mono-num tracking-tight text-slate-900">
-                {selectedPond?.temp ? selectedPond.temp.toFixed(1) : '29.8'}
-              </span>
-              <span className="font-mono-num text-xs text-slate-500">°C</span>
-            </div>
-            <div className="text-xs text-slate-500 border-t border-slate-200/60 pt-2 flex items-center justify-between">
-              <span>Khoảng tối ưu:</span>
-              <span className="font-mono-num font-semibold text-slate-700">28.0 - 31.5°C</span>
-            </div>
-          </div>
-
-          {/* Độ pH */}
-          <div className="p-4 bg-slate-50/70 rounded-xl border border-slate-200/80 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-              <span>Độ pH nước</span>
-              <span className="text-emerald-600 font-medium">An toàn</span>
-            </div>
-            <div className="flex items-baseline gap-1.5 my-2">
-              <span className="text-2xl font-bold font-mono-num tracking-tight text-slate-900">
-                {selectedPond?.ph ? selectedPond.ph.toFixed(2) : '7.82'}
-              </span>
-              <span className="font-mono-num text-xs text-slate-500">pH</span>
-            </div>
-            <div className="text-xs text-slate-500 border-t border-slate-200/60 pt-2 flex items-center justify-between">
-              <span>Dải tiêu chuẩn:</span>
-              <span className="font-mono-num font-semibold text-slate-700">7.5 - 8.3 pH</span>
-            </div>
-          </div>
-
-          {/* Cơ chế khóa */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col justify-between">
-            <div className="text-xs font-semibold text-slate-800">
-              Quy tắc bảo vệ tự động
-            </div>
-            <p className="text-xs text-slate-600 leading-relaxed my-2">
-              Tự động ngắt motor rải cám khi DO &lt; 4.0 mg/L hoặc nhiệt độ vượt ngưỡng, ngăn ngừa dư thừa thức ăn gây ô nhiễm đáy ao.
+            <p className="text-xs text-[#005320] mt-0.5 font-medium">
+              Các chỉ số DO ({selectedPond?.do ? selectedPond.do.toFixed(2) : '5.60'} mg/L), pH ({selectedPond?.ph ? selectedPond.ph.toFixed(1) : '7.9'}) và Nhiệt độ ({selectedPond?.temp ? selectedPond.temp.toFixed(1) : '28.5'}°C) đều nằm trong ngưỡng tối ưu. Cho phép vận hành 100% định mức.
             </p>
-            <div className="flex items-center justify-between text-[11px] text-slate-500 border-t border-slate-200 pt-2">
-              <span>Chế độ bảo vệ:</span>
-              <span className="font-semibold text-emerald-700">Đang bật</span>
+          </div>
+        </div>
+        <div className="text-xs font-mono-num font-bold text-[#006E2D] bg-white px-3 py-1.5 rounded-xl border border-[#7CF994] shrink-0">
+          Đồng hồ tủ máy: {currentTime}
+        </div>
+      </div>
+
+      {/* 2. TOP SPLIT: BIG CIRCULAR FEEDER GAUGE (LEFT 5 COLS) + TACTICAL CONTROL & VFD (RIGHT 7 COLS) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+        {/* LEFT 5 COLS: BIG CIRCULAR FEEDER PROGRESS GAUGE (Synced with Mobile may-cho-an.tsx) */}
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs flex flex-col justify-between items-center text-center">
+          <div className="w-full flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Tiến độ rải thức ăn ({selectedPond?.name || 'Ao Bạt A1'})
+            </span>
+            <span
+              className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
+                isPaused
+                  ? 'bg-[#FFDBCA] text-[#9D4300]'
+                  : 'bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994]'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-[#EA580C]' : 'bg-[#006E2D]'}`} />
+              {isPaused ? 'TẠM DỪNG' : 'ĐANG RẢI CÁM (AUTO)'}
+            </span>
+          </div>
+
+          {/* Big Circular SVG Ring */}
+          <div className="relative w-52 h-52 my-4 flex items-center justify-center">
+            <svg className="w-52 h-52 -rotate-90" viewBox="0 0 180 180">
+              {/* Outer status ring */}
+              <circle
+                cx="90"
+                cy="90"
+                r="86"
+                stroke={isPaused ? '#FFDBCA' : '#7CF994'}
+                strokeWidth="3"
+                fill="none"
+              />
+              {/* Background track */}
+              <circle cx="90" cy="90" r="78" stroke="#FFDBCA" strokeWidth="12" fill="none" />
+              {/* Active progress arc */}
+              <circle
+                cx="90"
+                cy="90"
+                r="78"
+                stroke="#EA580C"
+                strokeWidth="12"
+                fill="none"
+                strokeDasharray={bigCircumference}
+                strokeDashoffset={bigOffset}
+                strokeLinecap="round"
+                className="transition-all duration-500"
+              />
+            </svg>
+            <div className="absolute flex flex-col items-center">
+              <span className="text-3xl font-extrabold text-[#0B1C30] font-mono-num tracking-tight">
+                {sprayedInCurrentMeal.toFixed(1)} / {targetCurrentMeal.toFixed(1)}
+              </span>
+              <span className="text-xs font-semibold text-slate-500 mt-0.5">kg đã rải hôm nay</span>
+              <span className="mt-2 px-3 py-1 rounded-full bg-[#FFDBCA] text-[#9D4300] text-xs font-extrabold font-mono-num">
+                {feedPct}% ĐÃ RẢI
+              </span>
+            </div>
+          </div>
+
+          {/* 3 Mini Telemetry Cards at bottom of Gauge */}
+          <div className="w-full grid grid-cols-3 gap-2.5 pt-4 border-t border-slate-100 text-left">
+            <div className="p-3 rounded-xl bg-[#EFF4FF] border border-[#D3E4FE]">
+              <p className="text-[10px] font-bold text-[#006398] uppercase">Bầu chứa (Hopper)</p>
+              <p className="text-base font-extrabold text-[#0B1C30] font-mono-num mt-0.5">
+                {hopperPct}% <span className="text-xs font-normal">({hopperWeight.toFixed(0)}kg)</span>
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-[#FFF8F5] border border-[#FFDBCA]">
+              <p className="text-[10px] font-bold text-[#9D4300] uppercase">Lưu lượng vít tải</p>
+              <p className="text-base font-extrabold text-[#EA580C] font-mono-num mt-0.5">
+                450 <span className="text-xs font-normal">g/phút</span>
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-[#F0FDF4] border border-[#7CF994]/60">
+              <p className="text-[10px] font-bold text-[#006E2D] uppercase">Bán kính (VFD)</p>
+              <p className="text-base font-extrabold text-[#006E2D] font-mono-num mt-0.5">
+                {vfdFrequency === 35 ? '6.0m' : vfdFrequency === 50 ? '16.0m' : '12.0m'}{' '}
+                <span className="text-xs font-normal">({vfdFrequency}Hz)</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT 7 COLS: TACTICAL 6-BUTTON CONTROL + VFD RADIUS + LOADCELL ACTIONS */}
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs flex flex-col justify-between space-y-5">
+          {/* 6 Tactical Buttons */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-[#EA580C]" />
+                <h2 className="text-sm font-bold text-[#0B1C30]">
+                  Bảng điều khiển máy rải cám thời gian thực
+                </h2>
+              </div>
+              <span className="text-xs font-mono-num text-slate-400">
+                ID: FEEDER-{selectedPond?.code || 'A1'}-IOT
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {/* 1. Bắt đầu rải (START - Bio Green #006E2D) */}
+              <button
+                onClick={handleStartAuto}
+                className="h-16 px-3 bg-[#006E2D] hover:bg-[#005320] text-white rounded-xl flex flex-col items-center justify-center transition shadow-xs cursor-pointer"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Play className="w-4 h-4 fill-white" />
+                  <span className="font-bold text-xs">Bắt đầu rải (START)</span>
+                </div>
+                <span className="text-[11px] text-[#7FFC97] mt-0.5">Chế độ tự động</span>
+              </button>
+
+              {/* 2. Tạm dừng (PAUSE - Amber #FEF3C7/#B45309) */}
+              <button
+                onClick={handlePause}
+                className={`h-16 px-3 rounded-xl flex flex-col items-center justify-center border transition cursor-pointer ${
+                  isPaused
+                    ? 'bg-[#EA580C] text-white border-[#EA580C]'
+                    : 'bg-[#FEF3C7] hover:bg-amber-200/80 text-[#B45309] border-amber-300'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Pause className="w-4 h-4" />
+                  <span className="font-bold text-xs">
+                    {isPaused ? 'Tiếp tục rải' : 'Tạm dừng (PAUSE)'}
+                  </span>
+                </div>
+                <span className={`text-[11px] mt-0.5 ${isPaused ? 'text-[#FFDBCA]' : 'text-[#92400E]'}`}>
+                  Thăm nhá (10 phút)
+                </span>
+              </button>
+
+              {/* 3. Dừng khẩn cấp (E-STOP - Red #FFDAD6/#BA1A1A) */}
+              <button
+                onClick={handleTriggerEmergencyStop}
+                className="h-16 px-3 bg-[#FFDAD6] hover:bg-[#BA1A1A] text-[#BA1A1A] hover:text-white border border-[#BA1A1A]/30 rounded-xl flex flex-col items-center justify-center transition cursor-pointer"
+              >
+                <div className="flex items-center gap-1.5">
+                  <AlertOctagon className="w-4 h-4" />
+                  <span className="font-bold text-xs">Dừng hẳn (STOP)</span>
+                </div>
+                <span className="text-[11px] opacity-80 mt-0.5">Ngắt rơ-le tức thì</span>
+              </button>
+
+              {/* 4. Rải thử 10s (TEST - Ocean Blue #EFF4FF/#006398) */}
+              <button
+                onClick={handleTest10s}
+                disabled={isTestSpinning}
+                className="h-16 px-3 bg-[#EFF4FF] hover:bg-[#DCE9FF] text-[#006398] border border-[#D3E4FE] rounded-xl flex flex-col items-center justify-center transition cursor-pointer"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Timer className={`w-4 h-4 ${isTestSpinning ? 'animate-spin' : ''}`} />
+                  <span className="font-bold text-xs">
+                    {isTestSpinning ? `Đang thử (${testCountdown}s)` : 'Rải thử 10s (TEST)'}
+                  </span>
+                </div>
+                <span className="text-[11px] text-[#006398]/80 mt-0.5">Kiểm tra mâm văng</span>
+              </button>
+
+              {/* 5. Xả kẹt vít tải */}
+              <button
+                onClick={handleReverseMotor}
+                disabled={isReversing}
+                className="h-16 px-3 bg-[#F8F9FF] hover:bg-slate-100 text-[#0B1C30] border border-slate-200 rounded-xl flex flex-col items-center justify-center transition cursor-pointer"
+              >
+                <div className="flex items-center gap-1.5">
+                  <RotateCw className={`w-4 h-4 text-slate-600 ${isReversing ? 'animate-spin text-[#EA580C]' : ''}`} />
+                  <span className="font-bold text-xs">
+                    {isReversing ? 'Đang đảo mâm...' : 'Xả kẹt vít tải'}
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-500 mt-0.5">Đảo chiều mâm 3s</span>
+              </button>
+
+              {/* 6. Phun bù +2kg (Shrimp Orange #EA580C) */}
+              <button
+                onClick={handleAdd2Kg}
+                className="h-16 px-3 bg-gradient-to-r from-[#FB923C] to-[#EA580C] hover:opacity-95 text-white rounded-xl flex flex-col items-center justify-center transition shadow-xs cursor-pointer"
+              >
+                <div className="flex items-center gap-1.5">
+                  <PlusSquare className="w-4 h-4" />
+                  <span className="font-bold text-xs">Phun bù +2.0 kg</span>
+                </div>
+                <span className="text-[11px] text-[#FFDBCA] mt-0.5">Bổ sung cữ hiện tại</span>
+              </button>
+            </div>
+          </div>
+
+          {/* VFD Spread Radius Selector (3 Cards synced with Stitch & Mobile) */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Chọn bán kính văng VFD (Inverter Speed)
+              </span>
+              <span className="font-mono-num text-xs font-bold text-[#9D4300] bg-[#FFDBCA] px-2.5 py-0.5 rounded-full">
+                {vfdFrequency.toFixed(1)} Hz
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5">
+              <button
+                onClick={() => handleSetPresetFreq(35.0)}
+                className={`p-3 rounded-xl text-left transition border cursor-pointer ${
+                  vfdFrequency === 35.0
+                    ? 'border-2 border-[#EA580C] bg-[#FFF8F5]'
+                    : 'bg-[#F8F9FF] hover:bg-slate-100 border-slate-200'
+                }`}
+              >
+                <div className={`text-xs font-bold ${vfdFrequency === 35.0 ? 'text-[#9D4300]' : 'text-[#0B1C30]'}`}>
+                  Gần (6m)
+                </div>
+                <div className={`font-mono-num text-[11px] mt-0.5 ${vfdFrequency === 35.0 ? 'text-[#EA580C] font-bold' : 'text-slate-500'}`}>
+                  35.0 Hz • 1200 RPM
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleSetPresetFreq(45.0)}
+                className={`p-3 rounded-xl text-left transition border cursor-pointer ${
+                  vfdFrequency === 45.0
+                    ? 'border-2 border-[#EA580C] bg-[#FFF8F5]'
+                    : 'bg-[#F8F9FF] hover:bg-slate-100 border-slate-200'
+                }`}
+              >
+                <div className={`text-xs font-bold ${vfdFrequency === 45.0 ? 'text-[#9D4300]' : 'text-[#0B1C30]'}`}>
+                  Trung bình (12m)
+                </div>
+                <div className={`font-mono-num text-[11px] mt-0.5 ${vfdFrequency === 45.0 ? 'text-[#EA580C] font-bold' : 'text-slate-500'}`}>
+                  45.0 Hz • 2400 RPM
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleSetPresetFreq(50.0)}
+                className={`p-3 rounded-xl text-left transition border cursor-pointer ${
+                  vfdFrequency === 50.0
+                    ? 'border-2 border-[#EA580C] bg-[#FFF8F5]'
+                    : 'bg-[#F8F9FF] hover:bg-slate-100 border-slate-200'
+                }`}
+              >
+                <div className={`text-xs font-bold ${vfdFrequency === 50.0 ? 'text-[#9D4300]' : 'text-[#0B1C30]'}`}>
+                  Xa (16m)
+                </div>
+                <div className={`font-mono-num text-[11px] mt-0.5 ${vfdFrequency === 50.0 ? 'text-[#EA580C] font-bold' : 'text-slate-500'}`}>
+                  50.0 Hz • 3200 RPM
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Hopper Loadcell Quick Actions */}
+          <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="text-xs text-slate-600">
+              Cân điện tử Loadcell phễu chứa:{' '}
+              <strong className="text-[#0B1C30] font-mono-num">{hopperWeight.toFixed(1)} / {maxHopperWeight} kg</strong>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSetZeroScale}
+                className="h-8 px-3 bg-[#F8F9FF] hover:bg-slate-100 border border-slate-200 text-[#0B1C30] rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span>Đặt cân 0.0 kg</span>
+              </button>
+              <button
+                onClick={handleRefill50Kg}
+                className="h-8 px-3.5 bg-[#0B1C30] hover:bg-[#131B2E] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Package className="w-3.5 h-3.5 text-[#FB923C]" />
+                <span>+Nạp bao 50kg</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 4. TWO COLUMNS: HYDROPHONE ACOUSTIC + HOPPER LOADCELL & VFD */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-        {/* LEFT 6 COLS: HYDROPHONE ACOUSTIC FEEDING */}
-        <div className="lg:col-span-6 bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between gap-4">
+      {/* 3. BOTTOM SPLIT: HYDROPHONE ACOUSTIC SPECTRUM + PULSE MECHANISM STATS */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* LEFT 7 COLS: HYDROPHONE ACOUSTIC FEEDING */}
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between gap-4">
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-slate-500" />
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Phân tích âm thanh sức ăn (Hydrophone)
+                <Activity className="w-4 h-4 text-[#006E2D]" />
+                <h2 className="text-sm font-bold text-[#0B1C30]">
+                  Phân tích âm thanh sức ăn (Hydrophone Bio-Acoustics)
                 </h2>
               </div>
-              <span className="px-2.5 py-0.5 bg-slate-100 border border-slate-200 rounded-md text-xs font-mono-num text-slate-600">
+              <span className="px-2.5 py-0.5 bg-[#EFF4FF] border border-[#D3E4FE] rounded-full text-xs font-mono-num font-bold text-[#006398]">
                 15kHz - 45kHz
               </span>
             </div>
 
-            {/* Clean Light Spectrogram Card */}
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="p-4 bg-[#F8F9FF] rounded-xl border border-slate-200/80">
               <div className="flex items-center justify-between text-xs text-slate-600 mb-3">
                 <span>Cường độ âm thanh bắt mồi (60 giây gần nhất)</span>
-                <span className="font-semibold text-slate-900">
-                  Tần suất: <span className="text-teal-700 font-mono-num">88 xung/giây</span>
+                <span className="font-bold text-[#0B1C30]">
+                  Tần suất: <span className="text-[#006E2D] font-mono-num">88 xung/giây (Mức 3 - Ăn mạnh)</span>
                 </span>
               </div>
 
-              <div className="h-28 flex items-end justify-between gap-1 py-1 border-b border-slate-200">
+              <div className="h-24 flex items-end justify-between gap-1 py-1 border-b border-slate-200">
                 {waveformBars.map((bar, i) => (
                   <div
                     key={i}
                     className={`w-full rounded-t-xs transition-all duration-300 ${
-                      bar > 85 ? 'bg-teal-600' : bar > 60 ? 'bg-teal-500/70' : 'bg-slate-300'
+                      bar > 85 ? 'bg-[#EA580C]' : bar > 60 ? 'bg-[#006E2D]' : 'bg-[#40A2E7]'
                     }`}
                     style={{ height: `${bar}%` }}
                     title={`Mức cường độ: ${bar}%`}
@@ -466,260 +540,86 @@ export const FeederControlView = ({
               <div className="flex items-center justify-between text-[11px] font-mono-num text-slate-500 pt-2">
                 <span>-60s</span>
                 <span>-30s</span>
-                <span className="text-slate-800 font-medium">Hiện tại: {currentTime.slice(0, 5)}</span>
+                <span className="text-[#0B1C30] font-bold">Hiện tại: {currentTime.slice(0, 5)}</span>
               </div>
-            </div>
-
-            {/* Recommendation Box */}
-            <div className="p-4 bg-teal-50/50 rounded-xl border border-teal-200/80 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-teal-900">
-                  Đề xuất điều chỉnh tốc độ rải cám
-                </span>
-                <span className="text-[11px] font-mono-num text-teal-700 bg-white px-2 py-0.5 rounded border border-teal-200">
-                  Điểm bắt mồi: 92/100
-                </span>
-              </div>
-              <p className="text-xs text-slate-700 leading-relaxed">
-                <strong className="text-slate-900">
-                  {speedBoost ? 'Đang áp dụng +10% tốc độ rải:' : 'Tôm bắt mồi mạnh (+10% tốc độ rải):'}
-                </strong>{' '}
-                Mật độ xung âm thanh quanh vùng rải đạt mức cao, chưa ghi nhận cám dư lắng đáy.
-              </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5 pt-2">
-            <button
-              onClick={() => {
-                setSpeedBoost(true);
-                onShowToast('Đã kích hoạt tăng +10% tốc độ rải cám cho cữ hiện tại.', 'success');
-              }}
-              className={`h-9 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                speedBoost ? 'bg-emerald-600 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
-              }`}
-            >
-              <Check className="w-4 h-4" />
-              <span>{speedBoost ? 'Đã áp dụng +10%' : 'Áp dụng +10% tốc độ'}</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setSpeedBoost(false);
-                onShowToast('Đã chuyển về tốc độ định mức ban đầu.', 'info');
-              }}
-              className="h-9 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition cursor-pointer"
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Giữ tốc độ định mức</span>
-            </button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
+            <div className="text-xs text-slate-600">
+              <strong className="text-[#006E2D]">Gợi ý AI Hydrophone:</strong>{' '}
+              {speedBoost ? 'Đang áp dụng +10% tốc độ rải cám.' : 'Tôm bắt mồi mạnh, có thể tăng +10% tốc độ rải.'}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  setSpeedBoost(true);
+                  onShowToast('Đã kích hoạt tăng +10% tốc độ rải cám cho cữ hiện tại.', 'success');
+                }}
+                className={`h-8 px-3 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                  speedBoost ? 'bg-[#006E2D] text-white' : 'bg-[#EA580C] hover:bg-[#C2410C] text-white'
+                }`}
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>{speedBoost ? 'Đã áp dụng +10%' : 'Áp dụng +10% tốc độ'}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setSpeedBoost(false);
+                  onShowToast('Đã chuyển về tốc độ định mức ban đầu.', 'info');
+                }}
+                className="h-8 px-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                Giữ mặc định
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* RIGHT 6 COLS: HOPPER LOADCELL & VFD FREQUENCY */}
-        <div className="lg:col-span-6 bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between gap-4">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <Disc className="w-4 h-4 text-slate-500" />
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Thông số phễu chứa (Loadcell) & Biến tần VFD
-                </h2>
-              </div>
-              <span className="px-2.5 py-0.5 bg-slate-100 border border-slate-200 rounded-md text-xs text-slate-600">
-                Cân điện tử 4 điểm
-              </span>
+        {/* RIGHT 5 COLS: PULSE & HARDWARE TELEMETRY */}
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Gauge className="w-4 h-4 text-[#006398]" />
+              <h2 className="text-sm font-bold text-[#0B1C30]">
+                Thông số Xung phun & Động cơ
+              </h2>
             </div>
+            <span className="text-xs font-bold text-[#006E2D] bg-[#E8F5E9] px-2.5 py-0.5 rounded-full">
+              Hoạt động chuẩn
+            </span>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <div className="p-4 bg-slate-50/70 rounded-xl border border-slate-200/80 flex flex-col justify-between">
-                <span className="text-xs text-slate-500 font-medium">
-                  Trọng lượng cám trong phễu
-                </span>
-                <div className="my-2">
-                  <div className="flex items-baseline gap-1 font-mono-num">
-                    <span className="text-2xl font-bold text-slate-900 tracking-tight">
-                      {hopperWeight.toFixed(1)}
-                    </span>
-                    <span className="text-sm text-slate-400 font-medium">/ {maxHopperWeight} kg</span>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    Còn lại: {((hopperWeight / maxHopperWeight) * 100).toFixed(1)}% dung tích
-                  </div>
-                </div>
-                <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="bg-teal-600 h-1.5 rounded-full transition-all duration-300"
-                    style={{ width: `${(hopperWeight / maxHopperWeight) * 100}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="p-4 bg-slate-50/70 rounded-xl border border-slate-200/80 flex flex-col justify-between">
-                <span className="text-xs text-slate-500 font-medium">
-                  Dòng tải motor & Trạng thái mâm
-                </span>
-                <div className="my-2">
-                  <div className="flex items-baseline gap-1 font-mono-num">
-                    <span className="text-2xl font-bold text-slate-900 tracking-tight">1.42</span>
-                    <span className="text-sm text-slate-400 font-medium">A</span>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    Ngưỡng an toàn: &lt; 2.50 A
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-xs border-t border-slate-200/60 pt-1.5">
-                  <span className="text-slate-500">Mâm quay:</span>
-                  <span className="font-medium text-emerald-700 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    Thông thoáng
-                  </span>
-                </div>
+          <div className="grid grid-cols-2 gap-3 my-3 text-xs">
+            <div className="p-3.5 bg-[#F8F9FF] rounded-xl border border-slate-200/80">
+              <span className="text-slate-500">Chu kỳ xung rải:</span>
+              <div className="text-sm font-extrabold text-[#0B1C30] mt-1 font-mono-num">4s phun / 25s nghỉ</div>
+              <div className="text-xs mt-1 font-mono-num">
+                {pulseMode === 'spraying' ? (
+                  <span className="text-[#EA580C] font-bold">● Đang phun: {restCountdown}s</span>
+                ) : (
+                  <span className="text-[#006398] font-semibold">Đếm lùi nghỉ: {restCountdown}s</span>
+                )}
               </div>
             </div>
 
-            {/* VFD Radius Control */}
-            <div className="p-4 bg-slate-50/70 rounded-xl border border-slate-200/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-                  <Radio className="w-4 h-4 text-slate-500" />
-                  <span>Bán kính văng cám (Tần số biến tần VFD)</span>
-                </div>
-                <span className="font-mono-num text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded">
-                  {vfdFrequency.toFixed(1)} Hz
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => handleSetPresetFreq(35.0)}
-                  className={`p-2.5 rounded-lg text-left transition border cursor-pointer ${
-                    vfdFrequency === 35.0
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-                  }`}
-                >
-                  <div className="text-xs font-semibold">Gần (3 - 4m)</div>
-                  <div className={`font-mono-num text-[11px] ${vfdFrequency === 35.0 ? 'text-slate-300' : 'text-slate-400'}`}>
-                    35.0 Hz
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => handleSetPresetFreq(45.0)}
-                  className={`p-2.5 rounded-lg text-left transition border cursor-pointer ${
-                    vfdFrequency === 45.0
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-                  }`}
-                >
-                  <div className="text-xs font-semibold">Trung bình (6m)</div>
-                  <div className={`font-mono-num text-[11px] ${vfdFrequency === 45.0 ? 'text-slate-300' : 'text-slate-400'}`}>
-                    45.0 Hz
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => handleSetPresetFreq(50.0)}
-                  className={`p-2.5 rounded-lg text-left transition border cursor-pointer ${
-                    vfdFrequency === 50.0
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-                  }`}
-                >
-                  <div className="text-xs font-semibold">Xa (9 - 10m)</div>
-                  <div className={`font-mono-num text-[11px] ${vfdFrequency === 50.0 ? 'text-slate-300' : 'text-slate-400'}`}>
-                    50.0 Hz
-                  </div>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3 pt-1">
-                <span className="font-mono-num text-xs text-slate-400">30Hz</span>
-                <input
-                  type="range"
-                  min="30"
-                  max="50"
-                  step="0.5"
-                  value={vfdFrequency}
-                  onChange={(e) => setVfdFrequency(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
-                />
-                <span className="font-mono-num text-xs text-slate-400">50Hz</span>
-              </div>
+            <div className="p-3.5 bg-[#F8F9FF] rounded-xl border border-slate-200/80">
+              <span className="text-slate-500">Đợt rải trong cữ:</span>
+              <div className="text-sm font-extrabold text-[#0B1C30] mt-1 font-mono-num">Đợt 3 / 4 (5.0 kg)</div>
+              <div className="text-xs text-[#006E2D] font-semibold mt-1">Đã xong đợt 1 & 2</div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-2.5 pt-2">
-            <button
-              onClick={handleSetZeroScale}
-              className="h-9 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Đặt cân về 0.0 kg</span>
-            </button>
-
-            <button
-              onClick={handleRefill50Kg}
-              className="h-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition cursor-pointer"
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>Nạp mới bao 50kg</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 5. CURRENT MEAL PROGRESS & PULSE STATS */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
-          <div className="flex items-center gap-2">
-            <Gauge className="w-4 h-4 text-slate-500" />
-            <h2 className="text-sm font-semibold text-slate-900">
-              Tiến độ cữ ăn hiện tại (Cữ 2: 10:30 - 11:30)
-            </h2>
-          </div>
-          <div className="font-mono-num text-xs text-slate-500">
-            Đã rải:{' '}
-            <strong className="text-slate-900 font-semibold">
-              {sprayedInCurrentMeal.toFixed(1)} / {targetCurrentMeal.toFixed(1)} kg
-            </strong>{' '}
-            ({((sprayedInCurrentMeal / targetCurrentMeal) * 100).toFixed(1)}%) • Còn lại:{' '}
-            <strong className="text-slate-900 font-semibold">
-              {Math.max(0, targetCurrentMeal - sprayedInCurrentMeal).toFixed(1)} kg
-            </strong>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-3.5 text-xs">
-          <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/80">
-            <span className="text-slate-500">Chu kỳ xung nhịp rải:</span>
-            <div className="text-sm font-bold text-slate-900 mt-1 font-mono-num">4s phun / 25s nghỉ</div>
-            <div className="text-xs text-slate-500 mt-0.5 font-mono-num">
-              {pulseMode === 'spraying' ? (
-                <span className="text-emerald-600 font-semibold">● Đang phun: {restCountdown}s</span>
-              ) : (
-                <span>Đếm lùi nghỉ: {restCountdown}s</span>
-              )}
+            <div className="p-3.5 bg-[#F8F9FF] rounded-xl border border-slate-200/80">
+              <span className="text-slate-500">Dòng tải & Nhiệt motor:</span>
+              <div className="text-sm font-extrabold text-[#0B1C30] mt-1 font-mono-num">1.42 A • 38.4°C</div>
+              <div className="text-xs text-slate-500 mt-1">Ngưỡng bảo vệ: 2.5A / 65°C</div>
             </div>
-          </div>
 
-          <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/80">
-            <span className="text-slate-500">Đợt rải trong cữ:</span>
-            <div className="text-sm font-bold text-slate-900 mt-1 font-mono-num">Đợt 3 / 4 (5.0 kg)</div>
-            <div className="text-xs text-slate-500 mt-0.5">Đã hoàn thành đợt 1 & 2</div>
-          </div>
-
-          <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/80">
-            <span className="text-slate-500">Nhiệt độ động cơ:</span>
-            <div className="text-sm font-bold text-slate-900 mt-1 font-mono-num">38.4 °C</div>
-            <div className="text-xs text-slate-500 mt-0.5">Ngưỡng bảo vệ: 65.0 °C</div>
-          </div>
-
-          <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/80">
-            <span className="text-slate-500">Lưu trữ lịch tại tủ máy:</span>
-            <div className="text-sm font-bold text-slate-900 mt-1">Đã đồng bộ</div>
-            <div className="text-xs text-slate-500 mt-0.5">Tự vận hành khi mất kết nối mạng</div>
+            <div className="p-3.5 bg-[#F8F9FF] rounded-xl border border-slate-200/80">
+              <span className="text-slate-500">Bộ nhớ lịch tủ máy:</span>
+              <div className="text-sm font-extrabold text-[#006E2D] mt-1">Đã đồng bộ</div>
+              <div className="text-xs text-slate-500 mt-1">Chạy độc lập khi mất mạng</div>
+            </div>
           </div>
         </div>
       </div>

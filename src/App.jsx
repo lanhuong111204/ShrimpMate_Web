@@ -229,7 +229,7 @@ const SCADAAppContent = () => {
   const activePond = ponds.find((p) => p.id === selectedPondId) || ponds[1] || ponds[0];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 selection:bg-slate-900 selection:text-white">
+    <div className="min-h-screen bg-[#F8F9FF] flex flex-col font-sans text-[#0B1C30] selection:bg-[#EA580C] selection:text-white">
       {/* 1. Industrial Top Header */}
       <Header
         currentTime={currentTime}

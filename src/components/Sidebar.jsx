@@ -24,33 +24,33 @@ export const Sidebar = ({
   const { role } = useAuth();
 
   const navItemClass = (isActive) =>
-    `w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
+    `w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all cursor-pointer text-left ${
       isActive
-        ? 'bg-slate-900 text-white font-semibold shadow-xs'
-        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+        ? 'bg-gradient-to-r from-[#FB923C] to-[#EA580C] text-white font-semibold shadow-sm'
+        : 'text-slate-300 hover:text-white hover:bg-[#131B2E]'
     }`;
 
   return (
-    <aside className="w-full md:w-60 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-between shrink-0 select-none">
-      <div className="p-3 space-y-1">
+    <aside className="w-full md:w-64 bg-[#0B1C30] text-slate-200 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col justify-between shrink-0 select-none">
+      <div className="p-3.5 space-y-1">
         {role === 'admin' && (
-          <div className="mb-2 pb-2 border-b border-slate-100">
+          <div className="mb-3 pb-3 border-b border-slate-800/80">
             <button
               onClick={() => navigate('/admin')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-800 border border-slate-200 transition cursor-pointer"
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-[#131B2E] hover:bg-slate-800 text-[#FFDBCA] border border-[#EA580C]/40 transition cursor-pointer"
               title="Quay lại trang Quản trị viên"
             >
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-slate-700" />
+              <div className="flex items-center gap-2.5">
+                <Shield className="w-4 h-4 text-[#FB923C]" />
                 <span>Trang Quản trị Admin</span>
               </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
+              <ArrowRight className="w-3.5 h-3.5 text-[#FB923C]" />
             </button>
           </div>
         )}
 
-        <div className="px-3 py-1.5 text-[11px] font-semibold uppercase text-slate-400 tracking-wider">
-          Điều hành ao nuôi
+        <div className="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+          Giám sát & Vận hành
         </div>
 
         <button
@@ -59,7 +59,7 @@ export const Sidebar = ({
         >
           <div className="flex items-center gap-2.5">
             <LayoutDashboard className="w-4 h-4 shrink-0" />
-            <span>Tổng quan hệ thống</span>
+            <span>Tổng quan trại nuôi</span>
           </div>
         </button>
 
@@ -72,11 +72,13 @@ export const Sidebar = ({
             <span>Trang trại & Ao nuôi</span>
           </div>
           <span
-            className={`font-mono-num text-[11px] font-semibold px-1.5 py-0.5 rounded ${
-              currentTab === 'ponds' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+            className={`font-mono-num text-[11px] font-bold px-2 py-0.5 rounded-full ${
+              currentTab === 'ponds'
+                ? 'bg-white/20 text-white'
+                : 'bg-[#131B2E] text-[#7FFC97] border border-slate-700/80'
             }`}
           >
-            {activePondCount}
+            {activePondCount} Ao
           </span>
         </button>
 
@@ -86,10 +88,12 @@ export const Sidebar = ({
         >
           <div className="flex items-center gap-2.5">
             <Settings2 className="w-4 h-4 shrink-0" />
-            <span>Điều khiển máy ăn</span>
+            <span>Điều khiển Máy cho ăn</span>
           </div>
           <span
-            className="w-2 h-2 rounded-full bg-emerald-500"
+            className={`w-2 h-2 rounded-full ${
+              currentTab === 'feeder' ? 'bg-white' : 'bg-[#7FFC97]'
+            }`}
             title={`${feederReadyCount} máy sẵn sàng`}
           />
         </button>
@@ -110,11 +114,20 @@ export const Sidebar = ({
         >
           <div className="flex items-center gap-2.5">
             <Camera className="w-4 h-4 shrink-0" />
-            <span>Camera & Bắt mồi (FIS)</span>
+            <span>Chỉ số Nước & Camera FIS</span>
           </div>
+          <span
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+              currentTab === 'camera-fis' || currentTab === 'acoustics'
+                ? 'bg-white/20 text-white'
+                : 'bg-[#006398]/40 text-[#CCE5FF]'
+            }`}
+          >
+            6 Chỉ số
+          </span>
         </button>
 
-        <div className="pt-3 px-3 py-1.5 text-[11px] font-semibold uppercase text-slate-400 tracking-wider">
+        <div className="pt-3.5 px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
           Quản lý & Hạ tầng
         </div>
 
@@ -125,7 +138,7 @@ export const Sidebar = ({
           >
             <div className="flex items-center gap-2.5">
               <Users className="w-4 h-4 shrink-0" />
-              <span>Quản lý người nuôi</span>
+              <span>Nhân sự & Phân quyền</span>
             </div>
           </button>
         )}
@@ -151,14 +164,19 @@ export const Sidebar = ({
         </button>
       </div>
 
-      {/* Minimal System Status Footer */}
-      <div className="hidden md:block p-3 border-t border-slate-200">
-        <div className="px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-200/80 text-xs flex items-center justify-between">
-          <span className="text-slate-500">Hệ thống</span>
-          <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Hoạt động ổn định
-          </span>
+      {/* Mobile-Synced Dark Navy Status Footer */}
+      <div className="hidden md:block p-3.5 border-t border-slate-800/80">
+        <div className="px-3.5 py-3 bg-[#131B2E] rounded-xl border border-slate-800 text-xs space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-slate-400">Trạm IoT Trung tâm</span>
+            <span className="w-2 h-2 rounded-full bg-[#7FFC97]" />
+          </div>
+          <div className="font-semibold text-[#7FFC97] flex items-center justify-between">
+            <span>Đang kết nối ({feederReadyCount}/{activePondCount} Ao)</span>
+          </div>
+          <div className="text-[10px] text-slate-400 font-mono-num">
+            MQTT • Safety Rule Engine ON
+          </div>
         </div>
       </div>
     </aside>

@@ -8,7 +8,9 @@ import {
 } from './data/mockData';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { RoleRoute } from './components/common/RoleRoute';
 import { UnauthorizedView } from './components/common/UnauthorizedView';
+import AdminLayout from './components/admin/AdminLayout';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { Header } from './components/Header';
@@ -379,6 +381,18 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/unauthorized" element={<UnauthorizedView />} />
+
+          {/* Root Admin Platform Dashboard (Chỉ dành riêng cho admin) */}
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute>
+                <RoleRoute allowedRoles={['admin']}>
+                  <AdminLayout />
+                </RoleRoute>
+              </ProtectedRoute>
+            }
+          />
 
           {/* Protected SCADA Application Zone */}
           <Route

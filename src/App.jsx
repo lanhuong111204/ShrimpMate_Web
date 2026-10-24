@@ -6,6 +6,11 @@ import {
   INITIAL_SAFETY_RULES, 
   INITIAL_LOGS 
 } from './data/mockData';
+import { AuthProvider } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { UnauthorizedView } from './components/common/UnauthorizedView';
+import { LoginPage } from './pages/auth/LoginPage';
+import { RegisterPage } from './pages/auth/RegisterPage';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
@@ -345,7 +350,24 @@ const SCADAAppContent = () => {
 function App() {
   return (
     <BrowserRouter>
-      <SCADAAppContent />
+      <AuthProvider>
+        <Routes>
+          {/* Public Auth Routes */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/unauthorized" element={<UnauthorizedView />} />
+
+          {/* Protected SCADA Application Zone */}
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <SCADAAppContent />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

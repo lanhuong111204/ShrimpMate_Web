@@ -17,6 +17,7 @@ import { DashboardView } from './components/DashboardView';
 import { ScheduleView } from './components/ScheduleView';
 import { FeederControlView } from './components/FeederControlView';
 import { PondsManagementView } from './components/PondsManagementView';
+import { FarmersManagementView } from './components/FarmersManagementView';
 import { BioAcousticsView } from './components/BioAcousticsView';
 import { ScadaLogsView } from './components/ScadaLogsView';
 import { IoTStationView } from './components/IoTStationView';
@@ -32,6 +33,8 @@ const SCADAAppContent = () => {
     switch (pathname) {
       case '/ponds':
         return 'ponds';
+      case '/farmers':
+        return 'farmers';
       case '/feeder':
         return 'feeder';
       case '/schedule':
@@ -276,6 +279,10 @@ const SCADAAppContent = () => {
                   onRefillFeed={handleRefillFeed}
                 />
               }
+            />
+            <Route
+              path="/farmers"
+              element={<FarmersManagementView />}
             />
             <Route
               path="/feeder"

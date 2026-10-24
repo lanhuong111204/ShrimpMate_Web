@@ -6,7 +6,7 @@ import {
   Users, 
   Settings2, 
   Clock, 
-  Activity, 
+  Camera, 
   Radio, 
   History,
   Shield,
@@ -23,175 +23,142 @@ export const Sidebar = ({
   const navigate = useNavigate();
   const { role } = useAuth();
 
+  const navItemClass = (isActive) =>
+    `w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
+      isActive
+        ? 'bg-slate-900 text-white font-semibold shadow-xs'
+        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+    }`;
+
   return (
-    <aside className="w-56 bg-white border-r border-neutral-200 flex flex-col justify-between shrink-0 select-none">
+    <aside className="w-full md:w-60 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-between shrink-0 select-none">
       <div className="p-3 space-y-1">
-        {/* Lối tắt quay lại Bảng Admin (nếu role === 'admin') */}
         {role === 'admin' && (
-          <div className="mb-2 pb-2 border-b border-neutral-200">
+          <div className="mb-2 pb-2 border-b border-slate-100">
             <button
               onClick={() => navigate('/admin')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-800 transition cursor-pointer shadow-xs"
-              title="Quay lại bàn điều hành Quản trị viên"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-800 border border-slate-200 transition cursor-pointer"
+              title="Quay lại trang Quản trị viên"
             >
               <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-red-400" />
-                <span>Bàn Admin Root</span>
+                <Shield className="w-4 h-4 text-slate-700" />
+                <span>Trang Quản trị Admin</span>
               </div>
-              <ArrowRight className="w-3.5 h-3.5 text-red-400" />
+              <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
             </button>
           </div>
         )}
 
-        <div className="px-2.5 py-1 text-[10px] font-mono-num font-semibold uppercase text-neutral-400 tracking-wider">
-          Điều Hành Trung Tâm
+        <div className="px-3 py-1.5 text-[11px] font-semibold uppercase text-slate-400 tracking-wider">
+          Điều hành ao nuôi
         </div>
 
-        {/* 1. Bàn Tổng Quan */}
         <button
           onClick={() => onSelectTab('overview')}
-          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
-            currentTab === 'overview'
-              ? 'bg-neutral-900 text-white shadow-sm'
-              : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
-          }`}
+          className={navItemClass(currentTab === 'overview')}
         >
-          <LayoutDashboard className="w-4 h-4 shrink-0" />
-          <span>Bàn Tổng Quan</span>
+          <div className="flex items-center gap-2.5">
+            <LayoutDashboard className="w-4 h-4 shrink-0" />
+            <span>Tổng quan hệ thống</span>
+          </div>
         </button>
 
-        {/* 2. Quản Lý Trang Trại & Ao Nuôi (UC005, UC006) */}
         <button
           onClick={() => onSelectTab('ponds')}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-            currentTab === 'ponds'
-              ? 'bg-neutral-900 text-white shadow-sm font-semibold'
-              : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
-          }`}
+          className={navItemClass(currentTab === 'ponds')}
         >
           <div className="flex items-center gap-2.5">
             <Waves className="w-4 h-4 shrink-0" />
-            <span>Trang Trại & Ao Nuôi</span>
+            <span>Trang trại & Ao nuôi</span>
           </div>
           <span
-            className={`font-mono-num text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-              currentTab === 'ponds' ? 'bg-neutral-800 text-white' : 'bg-neutral-100 text-neutral-600'
+            className={`font-mono-num text-[11px] font-semibold px-1.5 py-0.5 rounded ${
+              currentTab === 'ponds' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
             }`}
           >
             {activePondCount}
           </span>
         </button>
 
-        {/* 3. Quản Lý Người Nuôi & Phân Công (UC020, UC021) - Ẩn với Farmer */}
-        {role !== 'farmer' && (
-          <button
-            onClick={() => onSelectTab('farmers')}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-              currentTab === 'farmers'
-                ? 'bg-neutral-900 text-white shadow-sm font-semibold'
-                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
-            }`}
-          >
-            <Users className="w-4 h-4 shrink-0" />
-            <span>Quản Lý Người Nuôi</span>
-          </button>
-        )}
-
-        {/* 4. Điều Khiển Máy Ăn */}
         <button
           onClick={() => onSelectTab('feeder')}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-            currentTab === 'feeder'
-              ? 'bg-neutral-900 text-white shadow-sm font-semibold'
-              : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
-          }`}
+          className={navItemClass(currentTab === 'feeder')}
         >
           <div className="flex items-center gap-2.5">
             <Settings2 className="w-4 h-4 shrink-0" />
-            <span>Điều Khiển Máy Ăn</span>
+            <span>Điều khiển máy ăn</span>
           </div>
           <span
-            className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100"
+            className="w-2 h-2 rounded-full bg-emerald-500"
             title={`${feederReadyCount} máy sẵn sàng`}
           />
         </button>
 
-        {/* 5. Lên Lịch Ăn Cữ */}
         <button
           onClick={() => onSelectTab('schedule')}
-          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-            currentTab === 'schedule'
-              ? 'bg-neutral-900 text-white shadow-sm font-semibold'
-              : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
-          }`}
+          className={navItemClass(currentTab === 'schedule')}
         >
-          <Clock className="w-4 h-4 shrink-0" />
-          <span>Lên Lịch Ăn Cữ</span>
+          <div className="flex items-center gap-2.5">
+            <Clock className="w-4 h-4 shrink-0" />
+            <span>Lịch cho ăn tự động</span>
+          </div>
         </button>
 
-        {/* 6. AI Camera & Bắt Mồi FIS (UC014, UC019) */}
         <button
           onClick={() => onSelectTab('camera-fis')}
-          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-            currentTab === 'camera-fis' || currentTab === 'acoustics'
-              ? 'bg-neutral-900 text-white shadow-sm font-semibold'
-              : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
-          }`}
+          className={navItemClass(currentTab === 'camera-fis' || currentTab === 'acoustics')}
         >
-          <Activity className="w-4 h-4 shrink-0 text-emerald-500" />
-          <span>AI Camera & Bắt Mồi FIS</span>
+          <div className="flex items-center gap-2.5">
+            <Camera className="w-4 h-4 shrink-0" />
+            <span>Camera & Bắt mồi (FIS)</span>
+          </div>
         </button>
 
-        <div className="pt-4 px-2.5 py-1 text-[10px] font-mono-num font-semibold uppercase text-neutral-400 tracking-wider">
-          Hạ Tầng Kỹ Thuật
+        <div className="pt-3 px-3 py-1.5 text-[11px] font-semibold uppercase text-slate-400 tracking-wider">
+          Quản lý & Hạ tầng
         </div>
 
-        {/* 7. Cài Đặt Trạm IoT */}
+        {role !== 'farmer' && (
+          <button
+            onClick={() => onSelectTab('farmers')}
+            className={navItemClass(currentTab === 'farmers')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Users className="w-4 h-4 shrink-0" />
+              <span>Quản lý người nuôi</span>
+            </div>
+          </button>
+        )}
+
         <button
           onClick={() => onSelectTab('iot')}
-          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-            currentTab === 'iot'
-              ? 'bg-neutral-900 text-white shadow-sm font-semibold'
-              : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
-          }`}
+          className={navItemClass(currentTab === 'iot')}
         >
-          <Radio className="w-4 h-4 shrink-0" />
-          <span>Cài Đặt Trạm IoT</span>
+          <div className="flex items-center gap-2.5">
+            <Radio className="w-4 h-4 shrink-0" />
+            <span>Trạm thiết bị IoT</span>
+          </div>
         </button>
 
-        {/* 8. Nhật Ký SCADA */}
         <button
           onClick={() => onSelectTab('logs')}
-          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-            currentTab === 'logs'
-              ? 'bg-neutral-900 text-white shadow-sm font-semibold'
-              : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
-          }`}
+          className={navItemClass(currentTab === 'logs')}
         >
-          <History className="w-4 h-4 shrink-0" />
-          <span>Nhật Ký SCADA</span>
+          <div className="flex items-center gap-2.5">
+            <History className="w-4 h-4 shrink-0" />
+            <span>Nhật ký vận hành</span>
+          </div>
         </button>
       </div>
 
-      {/* Bottom Hardware Telemetry Tile */}
-      <div className="p-3 border-t border-neutral-200">
-        <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-200/80 text-[11px] space-y-1.5 font-mono-num">
-          <div className="flex items-center justify-between text-neutral-500">
-            <span>Nguồn DC:</span>
-            <span className="text-neutral-900 font-semibold">24.2V – OK</span>
-          </div>
-          <div className="flex items-center justify-between text-neutral-500">
-            <span>Phụ tải rải:</span>
-            <span className="text-neutral-900 font-semibold">1.4 kW / 3.0 kW</span>
-          </div>
-          <div className="flex items-center justify-between text-neutral-500">
-            <span>Tần số LoRa:</span>
-            <span className="text-neutral-900 font-semibold">CH 08 (915.2)</span>
-          </div>
-          <div className="pt-1 border-t border-neutral-200/60 flex items-center justify-between text-[10px] text-neutral-400">
-            <span>MCU Core:</span>
-            <span className="text-emerald-700 font-medium">STM32F4 Ready</span>
-          </div>
+      {/* Minimal System Status Footer */}
+      <div className="hidden md:block p-3 border-t border-slate-200">
+        <div className="px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-200/80 text-xs flex items-center justify-between">
+          <span className="text-slate-500">Hệ thống</span>
+          <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            Hoạt động ổn định
+          </span>
         </div>
       </div>
     </aside>

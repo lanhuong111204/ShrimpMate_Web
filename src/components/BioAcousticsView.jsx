@@ -24,16 +24,13 @@ export const BioAcousticsView = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-neutral-900 rounded-full inline-block"></span>
-            <h1 className="font-display font-bold text-base md:text-lg text-neutral-900 tracking-tight uppercase">
-              AI BIO-ACOUSTIC – PHÂN TÍCH ÂM THANH BẮT MỒI HYDROPHONE
-            </h1>
-          </div>
-          <p className="text-xs text-neutral-500 mt-1">
-            Thuật toán FFT tách lọc tiếng búng vỏ tôm trong dải 15kHz-45kHz để xác định chính xác độ thèm ăn thực tế.
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Phân tích âm thanh bắt mồi (Hydrophone)
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Phân tích phổ tần số âm thanh bắt mồi dưới nước (15kHz – 45kHz) để đánh giá mức độ thèm ăn thực tế của đàn tôm.
           </p>
         </div>
 
@@ -41,7 +38,7 @@ export const BioAcousticsView = () => {
           <select
             value={selectedSensor}
             onChange={(e) => setSelectedSensor(e.target.value)}
-            className="h-8 px-3 rounded-lg border border-neutral-300 bg-white text-xs font-mono-num font-semibold text-neutral-800 cursor-pointer"
+            className="h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 cursor-pointer"
           >
             <option value="HYDRO-01">Cảm biến Hydrophone Ao 1</option>
             <option value="HYDRO-02">Cảm biến Hydrophone Ao 2 (Đang chọn)</option>
@@ -54,15 +51,15 @@ export const BioAcousticsView = () => {
       {/* Acoustic Frequency Bands */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {freqBands.map((band, idx) => (
-          <div key={idx} className="bg-white rounded-xl border border-neutral-200 p-4 shadow-sm space-y-2">
-            <div className="flex justify-between text-xs font-mono-num text-neutral-500">
-              <span className="font-bold text-neutral-800">{band.band}</span>
-              <span>{band.val}% Cường độ</span>
+          <div key={idx} className="bg-white rounded-xl border border-slate-200 p-5 space-y-2.5">
+            <div className="flex justify-between text-xs font-mono-num text-slate-500">
+              <span className="font-semibold text-slate-900">{band.band}</span>
+              <span>{band.val}%</span>
             </div>
-            <div className="text-xs font-medium text-neutral-600">{band.label}</div>
-            <div className="w-full bg-neutral-100 rounded-full h-2 overflow-hidden">
+            <div className="text-xs text-slate-500">{band.label}</div>
+            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
               <div
-                className="bg-neutral-900 h-2 rounded-full transition-all duration-300"
+                className="bg-teal-600 h-1.5 rounded-full transition-all duration-300"
                 style={{ width: `${band.val}%` }}
               />
             </div>
@@ -70,49 +67,48 @@ export const BioAcousticsView = () => {
         ))}
       </div>
 
-      {/* Acoustic Deep Dive Info */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 border-b border-neutral-100 pb-3">
-            <Activity className="w-4 h-4 text-neutral-700" />
-            <h3 className="font-display font-bold text-sm text-neutral-900 uppercase">
-              Tỷ Lệ Tiêu Thụ Cám & Khuyến Nghị Tự Động
+      {/* Acoustic Details */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+            <Activity className="w-4 h-4 text-slate-500" />
+            <h3 className="font-semibold text-sm text-slate-900">
+              Tỷ lệ tiêu thụ cám & Khuyến nghị điều chỉnh
             </h3>
           </div>
-          <p className="text-xs text-neutral-600 leading-relaxed">
-            Hệ thống hydrophone ghi nhận nhịp ăn đạt đỉnh sau 12 phút mở máy rải. Không phát hiện tiếng ồn lạ từ động cơ
-            hoặc bọt khí quạt nước xâm lấn dải tần búng mồi.
+          <p className="text-xs text-slate-600 leading-relaxed">
+            Cảm biến Hydrophone ghi nhận nhịp ăn đạt đỉnh sau 12 phút mở máy rải. Không phát hiện nhiễu từ động cơ quạt nước trong dải tần bắt mồi.
           </p>
-          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-mono-num space-y-1 text-emerald-800">
-            <div className="font-bold uppercase">Khuyến nghị điều hành:</div>
-            <div>• Tăng 5% - 10% lượng cám cữ trưa và cữ chiều.</div>
+          <div className="p-3.5 bg-teal-50/50 border border-teal-200/80 rounded-xl text-xs space-y-1 text-slate-800">
+            <div className="font-semibold text-teal-900">Đề xuất vận hành:</div>
+            <div>• Tăng 5% – 10% lượng cám cữ trưa và cữ chiều.</div>
             <div>• Giảm thời gian nghỉ giữa các nhịp phun từ 25s xuống 20s.</div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 border-b border-neutral-100 pb-3">
-            <Radio className="w-4 h-4 text-neutral-700" />
-            <h3 className="font-display font-bold text-sm text-neutral-900 uppercase">
-              Thông Số Phần Cứng Thu Âm Dưới Nước
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+            <Radio className="w-4 h-4 text-slate-500" />
+            <h3 className="font-semibold text-sm text-slate-900">
+              Thông số đầu dò thu âm dưới nước
             </h3>
           </div>
-          <div className="space-y-2 font-mono-num text-xs text-neutral-600">
-            <div className="flex justify-between py-1 border-b border-neutral-100">
+          <div className="space-y-2.5 text-xs text-slate-600">
+            <div className="flex justify-between py-1.5 border-b border-slate-100">
               <span>Độ sâu lắp đặt đầu dò:</span>
-              <strong className="text-neutral-900">0.8m cách mặt nước</strong>
+              <strong className="text-slate-900 font-mono-num">0.8m cách mặt nước</strong>
             </div>
-            <div className="flex justify-between py-1 border-b border-neutral-100">
-              <span>Độ nhạy Hydrophone:</span>
-              <strong className="text-neutral-900">-195 dB re 1V/µPa</strong>
+            <div className="flex justify-between py-1.5 border-b border-slate-100">
+              <span>Độ nhạy cảm biến:</span>
+              <strong className="text-slate-900 font-mono-num">-195 dB re 1V/µPa</strong>
             </div>
-            <div className="flex justify-between py-1 border-b border-neutral-100">
-              <span>Tốc độ lấy mẫu ADC:</span>
-              <strong className="text-neutral-900">192 kHz / 24-bit Hi-Res</strong>
+            <div className="flex justify-between py-1.5 border-b border-slate-100">
+              <span>Tần số lấy mẫu:</span>
+              <strong className="text-slate-900 font-mono-num">192 kHz / 24-bit</strong>
             </div>
             <div className="flex justify-between py-1">
-              <span>Tình trạng màng rung piezo:</span>
-              <strong className="text-emerald-600">Sạch, không bám rong rêu</strong>
+              <span>Tình trạng đầu dò:</span>
+              <strong className="text-emerald-700 font-medium">Hoạt động ổn định</strong>
             </div>
           </div>
         </div>

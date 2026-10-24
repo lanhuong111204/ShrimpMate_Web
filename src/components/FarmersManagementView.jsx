@@ -284,26 +284,23 @@ export const FarmersManagementView = () => {
   return (
     <div className="space-y-6">
       {/* 1. Header View */}
-      <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-emerald-600 rounded-full inline-block"></span>
-            <h1 className="font-display font-bold text-base md:text-lg text-neutral-900 tracking-tight uppercase">
-              QUẢN LÝ NGƯỜI NUÔI & PHÂN CÔNG AO (UC020, UC021)
-            </h1>
-          </div>
-          <p className="text-xs text-neutral-500 mt-1">
-            Chủ sở hữu (Manager) cấp tài khoản Farmer, giao quyền phụ trách ao và kiểm soát truy cập di động.
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Quản lý nhân sự & Phân công ao nuôi
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Quản lý tài khoản nhân viên kỹ thuật (Farmer) và phân quyền phụ trách từng ao nuôi.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition cursor-pointer"
+            className="h-9 px-3.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-lg flex items-center gap-2 transition cursor-pointer"
           >
-            <UserPlus className="w-4 h-4 text-emerald-400" />
-            <span>Thêm Người Nuôi Mới</span>
+            <UserPlus className="w-4 h-4" />
+            <span>Thêm nhân sự mới</span>
           </button>
         </div>
       </div>

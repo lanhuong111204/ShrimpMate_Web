@@ -20,59 +20,56 @@ export const ScadaLogsView = ({ logs, onExport }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-neutral-900 rounded-full inline-block"></span>
-            <h1 className="font-display font-bold text-base md:text-lg text-neutral-900 tracking-tight uppercase">
-              NHẬT KÝ VẬN HÀNH VÀ SỰ KIỆN SCADA
-            </h1>
-          </div>
-          <p className="text-xs text-neutral-500 mt-1">
-            Ghi vết toàn bộ thao tác máy ăn, tác động bảo vệ rơ-le khóa liên động và cảnh báo môi trường.
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Nhật ký vận hành & Cảnh báo
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Theo dõi lịch sử hoạt động của máy cho ăn, trạng thái khóa an toàn và các cảnh báo môi trường nước.
           </p>
         </div>
 
         <button
           onClick={onExport}
-          className="h-8 px-3 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+          className="h-9 px-3.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto"
         >
           <Download className="w-4 h-4" />
-          <span>Xuất Báo Cáo (.CSV)</span>
+          <span>Xuất báo cáo (.CSV)</span>
         </button>
       </div>
 
       {/* Filter and Search Toolbar */}
-      <div className="bg-white rounded-xl border border-neutral-200 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-neutral-400" />
-          <div className="flex gap-1 text-xs font-mono-num">
+          <Filter className="w-4 h-4 text-slate-400" />
+          <div className="flex gap-1.5 text-xs">
             <button
               onClick={() => setFilterType('all')}
-              className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
                 filterType === 'all'
-                  ? 'bg-neutral-900 text-white font-semibold'
-                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               Tất cả ({logs.length})
             </button>
             <button
               onClick={() => setFilterType('alert')}
-              className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
                 filterType === 'alert'
-                  ? 'bg-red-600 text-white font-semibold'
-                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                  ? 'bg-red-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               Cảnh báo ({logs.filter((l) => l.type === 'alert').length})
             </button>
             <button
               onClick={() => setFilterType('info')}
-              className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
                 filterType === 'info'
-                  ? 'bg-neutral-900 text-white font-semibold'
-                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               Vận hành ({logs.filter((l) => l.type === 'info').length})
@@ -81,47 +78,50 @@ export const ScadaLogsView = ({ logs, onExport }) => {
         </div>
 
         <div className="relative">
-          <Search className="w-4 h-4 text-neutral-400 absolute left-2.5 top-2.5" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
             placeholder="Tìm theo sự kiện, mã ao..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-9 pl-9 pr-3 rounded-lg border border-neutral-200 text-xs font-mono-num w-full sm:w-64 focus:outline-none focus:border-neutral-400"
+            className="h-9 pl-9 pr-3 rounded-lg border border-slate-200 text-xs w-full sm:w-64 focus:outline-none focus:border-teal-600"
           />
         </div>
       </div>
 
-      {/* Logs Table / Cards */}
-      <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden shadow-sm">
-        <div className="divide-y divide-neutral-100 font-mono-num text-xs">
+      {/* Logs List */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="divide-y divide-slate-100 text-xs">
           {filteredLogs.map((log) => {
             const isAlert = log.type === 'alert';
             return (
-              <div key={log.id} className="p-4 hover:bg-neutral-50/80 transition flex items-start gap-3">
-                <div className="mt-0.5 shrink-0">
+              <div
+                key={log.id}
+                className={`p-4 flex items-start justify-between gap-4 transition ${
+                  isAlert ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-start gap-3">
                   {isAlert ? (
-                    <AlertTriangle className="w-4 h-4 text-red-500" />
+                    <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                   ) : (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
                   )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`font-bold ${isAlert ? 'text-red-600' : 'text-neutral-900'}`}>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`font-semibold text-sm ${isAlert ? 'text-red-700' : 'text-slate-900'}`}>
                         {log.title}
                       </span>
                       {log.pondId && (
-                        <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 text-[10px]">
-                          AO SỐ 0{log.pondId}
+                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono-num text-[11px]">
+                          Ao số {log.pondId}
                         </span>
                       )}
                     </div>
-                    <span className="text-[11px] text-neutral-400">{log.timestamp}</span>
+                    <p className="text-slate-600 mt-1 leading-relaxed">{log.message}</p>
                   </div>
-                  <p className="text-neutral-600 font-sans mt-1 text-xs">{log.message}</p>
                 </div>
+                <span className="text-slate-400 font-mono-num whitespace-nowrap">{log.timestamp}</span>
               </div>
             );
           })}

@@ -177,25 +177,22 @@ export const PondsManagementView = ({
       )}
 
       {/* 1. Header & Farm Selector */}
-      <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-neutral-900 rounded-full inline-block"></span>
-            <h1 className="font-display font-bold text-base md:text-lg text-neutral-900 tracking-tight uppercase">
-              QUẢN LÝ TRANG TRẠI & CÁC AO NUÔI (UC005, UC006)
-            </h1>
-          </div>
-          <p className="text-xs text-neutral-500 mt-1">
-            Mô hình đa tenant: Quản lý cơ sở nuôi, diện tích mặt nước, vụ nuôi & gắn thiết bị phần cứng.
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Quản lý trang trại & Ao nuôi
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Quản lý cơ sở nuôi, diện tích mặt nước, vụ nuôi và cấu hình thiết bị theo từng ao.
           </p>
         </div>
 
         {/* Action Controls: Chọn Trang Trại & Khởi tạo */}
-        <div className="flex flex-wrap items-center gap-2 font-mono-num text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           {/* Farm Switcher Dropdown */}
-          <div className="flex items-center gap-1.5 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-1.5">
-            <Warehouse className="w-4 h-4 text-emerald-600" />
-            <span className="text-neutral-500 text-[11px] uppercase">Trang trại:</span>
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 h-9">
+            <Warehouse className="w-4 h-4 text-slate-500" />
+            <span className="text-slate-500">Trang trại:</span>
             {farms.length > 0 ? (
               <select
                 value={selectedFarm?.id || ''}
@@ -203,7 +200,7 @@ export const PondsManagementView = ({
                   const target = farms.find((f) => f.id === e.target.value);
                   setSelectedFarm(target);
                 }}
-                className="bg-transparent font-bold text-neutral-900 focus:outline-none cursor-pointer"
+                className="bg-transparent font-semibold text-slate-900 focus:outline-none cursor-pointer"
               >
                 {farms.map((f) => (
                   <option key={f.id} value={f.id}>
@@ -212,34 +209,34 @@ export const PondsManagementView = ({
                 ))}
               </select>
             ) : (
-              <strong className="text-neutral-700">Trại mặc định</strong>
+              <strong className="text-slate-700">Trại mặc định</strong>
             )}
           </div>
 
-          {/* Nút Sửa / Xóa Trang trại (Chỉ dành cho Manager sở hữu) */}
+          {/* Nút Sửa / Xóa Trang trại */}
           {canManage && selectedFarm && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => {
                   setEditingFarm(selectedFarm);
                   setIsFarmModalOpen(true);
                 }}
-                className="p-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl transition cursor-pointer"
+                className="h-9 w-9 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg flex items-center justify-center transition cursor-pointer"
                 title="Sửa thông tin trang trại"
               >
                 <Edit3 className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={handleDeleteFarm}
-                className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition cursor-pointer"
-                title="Xóa mềm trang trại"
+                className="h-9 w-9 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-lg flex items-center justify-center transition cursor-pointer"
+                title="Xóa trang trại"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
 
-          {/* Nút Khởi tạo Trang Trại Mới & Khai Báo Ao Mới (Chỉ Manager) */}
+          {/* Nút Khởi tạo Trang Trại Mới & Khai Báo Ao Mới */}
           {canManage && (
             <>
               <button
@@ -247,11 +244,10 @@ export const PondsManagementView = ({
                   setEditingFarm(null);
                   setIsFarmModalOpen(true);
                 }}
-                className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold rounded-xl flex items-center gap-1 transition cursor-pointer"
-                title="Khai báo thêm trang trại mới"
+                className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-medium rounded-lg flex items-center gap-1.5 transition cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Thêm Trại</span>
+                <span>Thêm trại</span>
               </button>
 
               <button
@@ -260,10 +256,10 @@ export const PondsManagementView = ({
                   setIsPondModalOpen(true);
                 }}
                 disabled={!selectedFarm && farms.length > 0}
-                className="px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl shadow-sm flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                className="h-9 px-3.5 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
               >
-                <Plus className="w-4 h-4 text-emerald-400" />
-                <span>Khai Báo Ao Mới</span>
+                <Plus className="w-4 h-4" />
+                <span>Khai báo ao mới</span>
               </button>
             </>
           )}

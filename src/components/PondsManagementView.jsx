@@ -11,8 +11,10 @@ import {
   Trash2, 
   RotateCw, 
   AlertCircle,
-  ChevronDown
+  ChevronDown,
+  Shield
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { farmService } from '../services/farmService';
 import { pondService } from '../services/pondService';
 import { FarmModal } from './ponds/FarmModal';
@@ -26,6 +28,8 @@ export const PondsManagementView = ({
   onNavigateTab,
   onRefillFeed,
 }) => {
+  const { role } = useAuth();
+  const canManage = role === 'manager';
   // Quản lý Trang trại
   const [farms, setFarms] = useState([]);
   const [selectedFarm, setSelectedFarm] = useState(null);
@@ -125,6 +129,21 @@ export const PondsManagementView = ({
       })
     : mockPonds || [];
 
+  // Xóa trang trại
+  const handleDeleteFarm = async () => {
+    if (!selectedFarm?.id) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa trang trại [${selectedFarm.name}]? Tất cả các ao nuôi trực thuộc sẽ được xóa mềm.`)) {
+      return;
+    }
+
+    try {
+      await farmService.deleteFarm(selectedFarm.id);
+      await fetchFarms();
+    } catch (err) {
+      alert('Lỗi xóa trang trại: ' + (err?.message || 'Lỗi hệ thống'));
+    }
+  };
+
   // Xóa ao nuôi
   const handleDeletePond = async (pond) => {
     if (!selectedFarm?.id) return;
@@ -142,26 +161,38 @@ export const PondsManagementView = ({
 
   return (
     <div className="space-y-6">
-      {/* 1. Header & Farm Selector */}
-      <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-neutral-900 rounded-full inline-block"></span>
-            <h1 className="font-display font-bold text-base md:text-lg text-neutral-900 tracking-tight uppercase">
-              QUẢN LÝ TRANG TRẠI & CÁC AO NUÔI (UC005, UC006)
-            </h1>
+      {/* Banner Chế độ Thanh tra dành cho Admin */}
+      {role === 'admin' && (
+        <div className="p-3.5 bg-[#0B1C30] border border-slate-800 text-slate-200 rounded-2xl flex items-center justify-between text-xs font-sans">
+          <div className="flex items-center gap-2.5">
+            <Shield className="w-4 h-4 text-[#7FFC97]" />
+            <span>
+              <strong>Chế độ Thanh tra & Giám sát Cơ sở Nuôi Toàn diện:</strong> Quản trị viên theo dõi dữ liệu trang trại, ao nuôi phục vụ hỗ trợ kỹ thuật và kiểm tra chéo chỉ số FCR (Chế độ xem chỉ đọc).
+            </span>
           </div>
-          <p className="text-xs text-neutral-500 mt-1">
-            Mô hình đa tenant: Quản lý cơ sở nuôi, diện tích mặt nước, vụ nuôi & gắn thiết bị phần cứng.
+          <span className="font-mono-num font-bold text-[10px] bg-[#FFDAD6] text-[#93000A] px-2.5 py-0.5 rounded-full">
+            READ-ONLY INSPECTION
+          </span>
+        </div>
+      )}
+
+      {/* 1. Header & Farm Selector */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-[#0B1C30] tracking-tight font-display">
+            Quản lý trang trại & Ao nuôi
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            Quản lý cơ sở nuôi, diện tích mặt nước, vụ nuôi và cấu hình thiết bị theo từng ao.
           </p>
         </div>
 
         {/* Action Controls: Chọn Trang Trại & Khởi tạo */}
-        <div className="flex flex-wrap items-center gap-2 font-mono-num text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           {/* Farm Switcher Dropdown */}
-          <div className="flex items-center gap-1.5 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-1.5">
-            <Warehouse className="w-4 h-4 text-emerald-600" />
-            <span className="text-neutral-500 text-[11px] uppercase">Trang trại:</span>
+          <div className="flex items-center gap-2 bg-[#EFF4FF] border border-[#D3E4FE] rounded-xl px-3 h-9">
+            <Warehouse className="w-4 h-4 text-[#006398]" />
+            <span className="text-[#006398] font-medium">Trang trại:</span>
             {farms.length > 0 ? (
               <select
                 value={selectedFarm?.id || ''}
@@ -169,7 +200,7 @@ export const PondsManagementView = ({
                   const target = farms.find((f) => f.id === e.target.value);
                   setSelectedFarm(target);
                 }}
-                className="bg-transparent font-bold text-neutral-900 focus:outline-none cursor-pointer"
+                className="bg-transparent font-bold text-[#0B1C30] focus:outline-none cursor-pointer"
               >
                 {farms.map((f) => (
                   <option key={f.id} value={f.id}>
@@ -178,35 +209,60 @@ export const PondsManagementView = ({
                 ))}
               </select>
             ) : (
-              <strong className="text-neutral-700">Trại mặc định</strong>
+              <strong className="text-[#0B1C30]">Trại Ba Đầm – Bạc Liêu</strong>
             )}
           </div>
 
-          {/* Nút Khởi tạo Trang Trại Mới */}
-          <button
-            onClick={() => {
-              setEditingFarm(null);
-              setIsFarmModalOpen(true);
-            }}
-            className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold rounded-xl flex items-center gap-1 transition cursor-pointer"
-            title="Khai báo thêm trang trại mới"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Thêm Trại</span>
-          </button>
+          {/* Nút Sửa / Xóa Trang trại */}
+          {canManage && selectedFarm && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  setEditingFarm(selectedFarm);
+                  setIsFarmModalOpen(true);
+                }}
+                className="h-9 w-9 bg-white hover:bg-slate-50 border border-slate-200 text-[#0B1C30] rounded-xl flex items-center justify-center transition cursor-pointer"
+                title="Sửa thông tin trang trại"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleDeleteFarm}
+                className="h-9 w-9 bg-[#FFF8F8] hover:bg-[#FFDAD6] border border-[#FFDAD6] text-[#BA1A1A] rounded-xl flex items-center justify-center transition cursor-pointer"
+                title="Xóa trang trại"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
-          {/* Nút Khởi tạo Ao Mới */}
-          <button
-            onClick={() => {
-              setEditingPond(null);
-              setIsPondModalOpen(true);
-            }}
-            disabled={!selectedFarm && farms.length > 0}
-            className="px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl shadow-sm flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
-          >
-            <Plus className="w-4 h-4 text-emerald-400" />
-            <span>Khai Báo Ao Mới</span>
-          </button>
+          {/* Nút Khởi tạo Trang Trại Mới & Khai Báo Ao Mới */}
+          {canManage && (
+            <>
+              <button
+                onClick={() => {
+                  setEditingFarm(null);
+                  setIsFarmModalOpen(true);
+                }}
+                className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-[#0B1C30] font-semibold rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 text-[#006398]" />
+                <span>Thêm trại</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setEditingPond(null);
+                  setIsPondModalOpen(true);
+                }}
+                disabled={!selectedFarm && farms.length > 0}
+                className="h-9 px-3.5 bg-[#EA580C] hover:bg-[#C2410C] text-white font-bold rounded-xl flex items-center gap-1.5 transition shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Khai báo ao mới</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -220,8 +276,8 @@ export const PondsManagementView = ({
           return (
             <div
               key={pond.id}
-              className={`bg-white rounded-2xl border p-5 shadow-sm flex flex-col justify-between transition-all ${
-                isAlert ? 'border-red-300 ring-1 ring-red-100' : 'border-neutral-200 hover:border-neutral-300'
+              className={`bg-white rounded-2xl border p-5 shadow-2xs flex flex-col justify-between transition-all ${
+                isAlert ? 'border-amber-300' : 'border-slate-200 hover:border-[#EA580C]/50'
               }`}
             >
               <div className="space-y-4">
@@ -229,124 +285,124 @@ export const PondsManagementView = ({
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2.5">
-                      <h3 className="font-display font-bold text-lg text-neutral-900 tracking-tight">
+                      <h3 className="font-display font-bold text-lg text-[#0B1C30] tracking-tight">
                         {pond.name}
                       </h3>
-                      <span className="text-[11px] font-mono-num bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded font-bold border border-neutral-200">
+                      <span className="text-[11px] font-mono-num bg-[#EFF4FF] text-[#006398] px-2 py-0.5 rounded-md font-bold border border-[#D3E4FE]">
                         {pond.code}
                       </span>
                     </div>
-                    <div className="text-xs text-neutral-500 font-mono-num">
-                      Diện tích: <strong className="text-neutral-800">{pond.areaM2 ? `${pond.areaM2.toLocaleString('vi-VN')} m²` : pond.area}</strong>
+                    <div className="text-xs text-slate-500 font-mono-num">
+                      Diện tích: <strong className="text-[#0B1C30]">{pond.areaM2 ? `${pond.areaM2.toLocaleString('vi-VN')} m²` : pond.area}</strong>
                       {pond.shrimpType && ` • ${pond.shrimpType}`}
                     </div>
                   </div>
 
                   {/* Status Badge */}
                   {isAlert ? (
-                    <span className="px-2.5 py-1 rounded-full text-xs font-mono-num font-bold bg-red-50 text-red-600 border border-red-200 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                      HẾT CÁM PHỄU
+                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-300 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
+                      CẢNH BÁO PHỄU
                     </span>
                   ) : isPaused ? (
-                    <span className="px-2.5 py-1 rounded-full text-xs font-mono-num font-semibold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-[#FFDBCA] text-[#9D4300] flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#EA580C]" />
                       TẠM DỪNG
                     </span>
                   ) : isIdle ? (
-                    <span className="px-2.5 py-1 rounded-full text-xs font-mono-num font-semibold bg-neutral-100 text-neutral-600 border border-neutral-200">
-                      CẢI TẠO / NGHỈ
+                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE]">
+                      CHỜ LỊCH KẾ TIẾP
                     </span>
                   ) : (
-                    <span className="px-2.5 py-1 rounded-full text-xs font-mono-num font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994] flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#006E2D]" />
                       ĐANG NUÔI
                     </span>
                   )}
                 </div>
 
                 {/* 3 Chỉ số quan trắc mẫu */}
-                <div className="grid grid-cols-3 gap-2 py-3 bg-neutral-50 rounded-xl text-center font-mono-num border border-neutral-100">
-                  <div className="border-r border-neutral-200/60">
-                    <div className="text-[10px] text-neutral-400 uppercase">Oxy Hòa Tan</div>
-                    <div className="text-lg font-bold text-neutral-900 mt-0.5">
+                <div className="grid grid-cols-3 gap-2 font-mono-num">
+                  <div className="p-3 rounded-xl bg-[#F0FDF4] border border-[#7CF994]/60 text-center">
+                    <div className="text-[10px] text-[#006E2D] font-bold uppercase">Oxy Hòa Tan</div>
+                    <div className="text-lg font-extrabold text-[#006E2D] mt-0.5">
                       {typeof pond.do === 'number' ? pond.do.toFixed(2) : pond.do || '--'}
                     </div>
-                    <div className="text-[10px] text-neutral-400">mg/L</div>
+                    <div className="text-[10px] text-[#005320]">mg/L</div>
                   </div>
-                  <div className="border-r border-neutral-200/60">
-                    <div className="text-[10px] text-neutral-400 uppercase">Nhiệt Độ Nước</div>
-                    <div className="text-lg font-bold text-neutral-900 mt-0.5">
+                  <div className="p-3 rounded-xl bg-[#FFF8F5] border border-[#FFDBCA] text-center">
+                    <div className="text-[10px] text-[#9D4300] font-bold uppercase">Nhiệt Độ Nước</div>
+                    <div className="text-lg font-extrabold text-[#9D4300] mt-0.5">
                       {typeof pond.temp === 'number' ? pond.temp.toFixed(1) : pond.temp || '--'}
                     </div>
-                    <div className="text-[10px] text-neutral-400">°C</div>
+                    <div className="text-[10px] text-[#EA580C]">°C</div>
                   </div>
-                  <div>
-                    <div className="text-[10px] text-neutral-400 uppercase">Độ Kiềm / pH</div>
-                    <div className="text-lg font-bold text-neutral-900 mt-0.5">
+                  <div className="p-3 rounded-xl bg-[#EFF4FF] border border-[#D3E4FE] text-center">
+                    <div className="text-[10px] text-[#006398] font-bold uppercase">Độ pH Nước</div>
+                    <div className="text-lg font-extrabold text-[#006398] mt-0.5">
                       {typeof pond.ph === 'number' ? pond.ph.toFixed(1) : pond.ph || '--'}
                     </div>
-                    <div className="text-[10px] text-neutral-400">Ổn định</div>
+                    <div className="text-[10px] text-[#006398]">Ổn định</div>
                   </div>
                 </div>
 
-                {/* Dải Quản Trị: Gán Thiết Bị & Vụ Nuôi FCR */}
-                <div className="flex items-center gap-2 pt-1 font-mono-num text-xs">
-                  <button
-                    onClick={() => {
-                      setClaimTargetPond(pond);
-                      setIsClaimModalOpen(true);
-                    }}
-                    className="flex-1 py-1.5 px-2 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer border border-neutral-200"
-                  >
-                    <Cpu className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Thiết Bị IoT</span>
-                  </button>
+                {/* Dải Quản Trị: Gán Thiết Bị & Vụ Nuôi FCR (Chỉ dành cho Manager) */}
+                {canManage && (
+                  <div className="flex items-center gap-2 pt-1 font-mono-num text-xs">
+                    <button
+                      onClick={() => {
+                        setClaimTargetPond(pond);
+                        setIsClaimModalOpen(true);
+                      }}
+                      className="flex-1 py-2 px-2 rounded-xl bg-[#EFF4FF] hover:bg-[#DCE9FF] text-[#006398] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border border-[#D3E4FE]"
+                    >
+                      <Cpu className="w-3.5 h-3.5 text-[#006398]" />
+                      <span>Thiết Bị IoT</span>
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      setSeasonTargetPond(pond);
-                      setIsSeasonModalOpen(true);
-                    }}
-                    className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border border-emerald-200"
-                  >
-                    <Sprout className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Vụ Nuôi & FCR</span>
-                  </button>
+                    <button
+                      onClick={() => {
+                        setSeasonTargetPond(pond);
+                        setIsSeasonModalOpen(true);
+                      }}
+                      className="flex-1 py-2 px-2 rounded-xl bg-[#E8F5E9] hover:bg-[#7CF994]/40 text-[#006E2D] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border border-[#7CF994]"
+                    >
+                      <Sprout className="w-3.5 h-3.5 text-[#006E2D]" />
+                      <span>Vụ Nuôi & FCR</span>
+                    </button>
 
-                  {/* Sửa Ao */}
-                  <button
-                    onClick={() => {
-                      setEditingPond(pond);
-                      setIsPondModalOpen(true);
-                    }}
-                    className="p-1.5 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 transition cursor-pointer"
-                    title="Chỉnh sửa thông tin ao"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
+                    <button
+                      onClick={() => {
+                        setEditingPond(pond);
+                        setIsPondModalOpen(true);
+                      }}
+                      className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                      title="Chỉnh sửa thông tin ao"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
 
-                  {/* Xóa Ao */}
-                  <button
-                    onClick={() => handleDeletePond(pond)}
-                    className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition cursor-pointer"
-                    title="Xóa ao nuôi"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                    <button
+                      onClick={() => handleDeletePond(pond)}
+                      className="p-2 rounded-xl border border-[#FFDAD6] text-[#BA1A1A] hover:bg-[#FFF8F8] transition cursor-pointer"
+                      title="Xóa ao nuôi"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Dải Nút Thao Tác SCADA */}
-              <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-neutral-100 text-xs font-mono-num">
+              <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 text-xs">
                 <button
                   onClick={() => {
                     onSelectPond(pond.id);
                     onNavigateTab('feeder', pond.id);
                   }}
-                  className="py-2 px-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg font-semibold flex items-center justify-center gap-1 transition cursor-pointer shadow-xs"
+                  className="py-2 px-2 bg-[#0B1C30] hover:bg-[#131B2E] text-white rounded-xl font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-xs"
                 >
-                  <Settings2 className="w-3.5 h-3.5" />
+                  <Settings2 className="w-3.5 h-3.5 text-[#FB923C]" />
                   <span>Máy Ăn</span>
                 </button>
 
@@ -355,18 +411,18 @@ export const PondsManagementView = ({
                     onSelectPond(pond.id);
                     onNavigateTab('schedule', pond.id);
                   }}
-                  className="py-2 px-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
+                  className="py-2 px-2 bg-[#F8F9FF] hover:bg-slate-100 text-[#0B1C30] border border-slate-200 rounded-xl font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
                 >
-                  <Clock className="w-3.5 h-3.5" />
+                  <Clock className="w-3.5 h-3.5 text-[#006398]" />
                   <span>Lịch Cữ</span>
                 </button>
 
                 <button
                   onClick={() => onRefillFeed(pond.id, 25)}
-                  className="py-2 px-2 border border-neutral-300 hover:bg-neutral-50 text-neutral-700 rounded-lg font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
+                  className="py-2 px-2 bg-[#EA580C] hover:bg-[#C2410C] text-white rounded-xl font-bold flex items-center justify-center gap-1 transition cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>+25kg</span>
+                  <span>+Nạp 25kg</span>
                 </button>
               </div>
             </div>

@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  ShieldAlert, 
   LayoutDashboard, 
   Users, 
   Cpu, 
@@ -9,8 +8,10 @@ import {
   Radio, 
   ArrowLeft, 
   LogOut, 
-  ExternalLink,
-  ChevronRight
+  KeyRound,
+  User as UserIcon,
+  ChevronDown,
+  Waves
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminOverviewView from './AdminOverviewView';
@@ -18,43 +19,55 @@ import AdminUsersView from './AdminUsersView';
 import AdminCatalogView from './AdminCatalogView';
 import AdminSafetyRulesView from './AdminSafetyRulesView';
 import AdminMqttTestView from './AdminMqttTestView';
+import { ChangePasswordModal } from '../auth/ChangePasswordModal';
+import { ProfileModal } from '../auth/ProfileModal';
 
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isChangePassOpen, setIsChangePassOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const navItems = [
     {
       path: '/admin',
       alias: '/admin/overview',
-      label: 'Tổng quan Nền tảng',
+      label: 'Tổng quan nền tảng',
       icon: LayoutDashboard,
-      description: 'KPIs, thiết bị offline, cảnh báo nguy cấp'
     },
     {
       path: '/admin/users',
-      label: 'Quản lý Tài khoản',
+      label: 'Quản lý tài khoản',
       icon: Users,
-      description: 'Phân quyền RBAC, khóa/mở khóa'
     },
     {
       path: '/admin/catalog',
-      label: 'IoT Hardware Catalog',
+      label: 'Danh mục thiết bị IoT',
       icon: Cpu,
-      description: 'Khai báo thiết bị kho chuẩn, thu hồi'
     },
     {
       path: '/admin/safety-rules',
-      label: 'Quy tắc An toàn Nước',
+      label: 'Quy tắc an toàn nước',
       icon: ShieldCheck,
-      description: 'Ngưỡng DO, pH, Temp bảo vệ phần cứng'
     },
     {
       path: '/admin/mqtt',
-      label: 'Kiểm thử MQTT Broker',
+      label: 'Kiểm thử kết nối MQTT',
       icon: Radio,
-      description: 'Giao tiếp 2 chiều, test Feeder'
     },
   ];
 
@@ -70,66 +83,135 @@ export default function AdminLayout() {
     return location.pathname.startsWith(item.path);
   };
 
+  const displayName = user?.fullName || user?.email || 'Quản trị viên';
+  const initialChar = displayName.charAt(0).toUpperCase();
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* TOP ADMIN HEADER */}
-      <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 sm:px-6 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-[#F8F9FF] text-[#0B1C30] flex flex-col font-sans">
+      {/* TOP ADMIN HEADER (Deep Ocean Navy #0B1C30) */}
+      <header className="sticky top-0 z-40 bg-[#0B1C30] border-b border-[#1E293B] px-4 sm:px-6 h-16 flex items-center shadow-md">
+        <div className="max-w-7xl w-full mx-auto flex items-center justify-between gap-4">
           {/* Left: Brand & Admin Tag */}
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-600 to-indigo-600 flex items-center justify-center font-black text-white text-base shadow-lg shadow-indigo-500/20">
-              SM
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FB923C] to-[#EA580C] text-white flex items-center justify-center shrink-0 shadow-sm shadow-[#EA580C]/30">
+              <Waves className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-white text-sm tracking-wide">SHRIMPMATE ADMIN</span>
-                <span className="text-[10px] uppercase font-mono font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded-full">
-                  Root Console
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 hidden sm:block">
-                Hệ thống Quản trị & Điều phối Toàn cục Trung tâm
-              </p>
+            <div className="flex items-center gap-2.5">
+              <span className="font-bold text-base tracking-tight text-white">
+                ShrimpMate <span className="text-[#FB923C]">Admin</span>
+              </span>
+              <span className="hidden sm:inline-block text-[10px] font-bold uppercase tracking-wider bg-[#131B2E] text-[#7CF994] border border-[#1E293B] px-2.5 py-0.5 rounded-full">
+                Quản trị hệ thống
+              </span>
             </div>
           </div>
 
-          {/* Right: Switch to Field SCADA & Profile */}
+          {/* Center: Horizontal Navigation Tabs */}
+          <nav className="hidden lg:flex items-center gap-1.5 bg-[#131B2E] p-1 rounded-xl border border-[#1E293B]">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item);
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                    active
+                      ? 'bg-gradient-to-r from-[#FB923C] to-[#EA580C] text-white shadow-sm'
+                      : 'text-slate-300 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${active ? 'text-white' : 'text-slate-400'}`} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Right: Switch to Field Dashboard & Profile Dropdown */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/')}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700/80 transition shadow-sm cursor-pointer"
-              title="Chuyển sang màn hình điều hành ao nuôi tại hiện trường"
+              className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-[#131B2E] hover:bg-[#1E293B] text-[#7CF994] text-xs font-bold border border-[#7CF994]/30 transition cursor-pointer"
             >
-              <ArrowLeft className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Chế độ Xem Bàn SCADA</span>
+              <ArrowLeft className="w-3.5 h-3.5 text-[#7CF994]" />
+              <span className="hidden sm:inline">Quay lại Trang vận hành</span>
             </button>
 
-            <div className="h-4 w-px bg-slate-800" />
+            <div className="h-5 w-px bg-[#1E293B]" />
 
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 flex items-center justify-center font-bold text-xs uppercase">
-                {user?.fullName?.charAt(0) || user?.email?.charAt(0) || 'A'}
-              </div>
-              <div className="hidden md:block text-left text-xs">
-                <div className="font-semibold text-white leading-tight">{user?.fullName || user?.email}</div>
-                <div className="text-[10px] text-rose-400 font-mono">ROLE: SYSTEM_ADMIN</div>
-              </div>
-
+            {/* Profile Dropdown */}
+            <div className="relative" ref={dropdownRef}>
               <button
-                onClick={handleLogout}
-                title="Đăng xuất"
-                className="p-2 rounded-lg bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-slate-700/60 transition cursor-pointer"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex items-center gap-2 pl-2 pr-2 py-1 rounded-xl hover:bg-[#131B2E] border border-transparent hover:border-[#1E293B] transition cursor-pointer text-right"
               >
-                <LogOut className="w-4 h-4" />
+                <div className="hidden md:block text-right">
+                  <div className="text-xs font-semibold text-white leading-tight truncate max-w-[140px]">
+                    {displayName}
+                  </div>
+                  <div className="text-[10px] text-[#FB923C] font-semibold">
+                    Quản trị viên
+                  </div>
+                </div>
+
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#FB923C] to-[#EA580C] flex items-center justify-center font-bold text-xs text-white shadow-sm">
+                  {initialChar}
+                </div>
+
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
               </button>
+
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-slate-200 shadow-xl py-1.5 z-50 text-xs">
+                  <div className="px-4 py-2.5 border-b border-slate-100 text-left">
+                    <p className="font-bold text-[#0B1C30] truncate">{displayName}</p>
+                    <p className="text-[11px] text-slate-500 font-mono-num truncate mt-0.5">{user?.email || user?.phoneNumber}</p>
+                  </div>
+
+                  <div className="py-1">
+                    <button
+                      onClick={() => {
+                        setIsDropdownOpen(false);
+                        setIsProfileOpen(true);
+                      }}
+                      className="w-full px-4 py-2 text-left text-slate-700 hover:bg-[#F8F9FF] flex items-center gap-2.5 transition cursor-pointer font-medium"
+                    >
+                      <UserIcon className="w-3.5 h-3.5 text-[#006398]" />
+                      <span>Hồ sơ cá nhân</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setIsDropdownOpen(false);
+                        setIsChangePassOpen(true);
+                      }}
+                      className="w-full px-4 py-2 text-left text-slate-700 hover:bg-[#F8F9FF] flex items-center gap-2.5 transition cursor-pointer font-medium"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-[#EA580C]" />
+                      <span>Đổi mật khẩu</span>
+                    </button>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-1">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full px-4 py-2 text-left text-[#BA1A1A] hover:bg-[#FFDAD6]/40 flex items-center gap-2.5 transition cursor-pointer font-bold"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Đăng xuất</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </header>
 
-      {/* HORIZONTAL NAVIGATION BAR */}
-      <nav className="bg-slate-900 border-b border-slate-800/80 px-4 sm:px-6 overflow-x-auto scrollbar-none">
-        <div className="max-w-7xl mx-auto flex items-center gap-1 sm:gap-2 py-2">
+      {/* MOBILE / TABLET SUB-NAV BAR */}
+      <nav className="lg:hidden bg-white border-b border-slate-200 px-4 sm:px-6 overflow-x-auto scrollbar-none">
+        <div className="max-w-7xl mx-auto flex items-center gap-1.5 py-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item);
@@ -137,13 +219,13 @@ export default function AdminLayout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                   active
-                    ? 'bg-rose-600 text-white font-semibold shadow-md shadow-rose-600/30'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    ? 'bg-[#FFF8F5] text-[#EA580C] border border-[#FFDBCA]'
+                    : 'text-slate-600 hover:text-[#0B1C30] hover:bg-slate-50'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${active ? 'text-white' : 'text-slate-400'}`} />
+                <Icon className={`w-4 h-4 ${active ? 'text-[#EA580C]' : 'text-slate-400'}`} />
                 <span>{item.label}</span>
               </Link>
             );
@@ -163,6 +245,17 @@ export default function AdminLayout() {
           <Route path="*" element={<AdminOverviewView />} />
         </Routes>
       </main>
+
+      {/* Modals */}
+      <ChangePasswordModal
+        isOpen={isChangePassOpen}
+        onClose={() => setIsChangePassOpen(false)}
+        onSuccess={() => {}}
+      />
+      <ProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+      />
     </div>
   );
 }

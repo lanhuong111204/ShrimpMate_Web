@@ -70,51 +70,51 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 font-sans selection:bg-neutral-800 selection:text-white relative overflow-hidden">
-      {/* Background Graphic Grid */}
-      <div className="absolute inset-0 bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none" />
+    <div className="min-h-screen bg-[#F8F9FF] flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 font-sans relative overflow-hidden">
+      {/* Subtle Top Accent Gradient */}
+      <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-[#0B1C30] to-transparent pointer-events-none" />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md z-10 text-center">
         {/* Logo Brand */}
-        <div className="inline-flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-xl bg-white text-neutral-950 flex items-center justify-center font-display font-black text-lg tracking-tight shadow-md">
-            SM
+        <div className="inline-flex items-center gap-3.5 mb-2 bg-[#0B1C30] px-5 py-3 rounded-2xl border border-[#1E293B] shadow-lg">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FB923C] to-[#EA580C] text-white flex items-center justify-center shadow-md shadow-[#EA580C]/30">
+            <Waves className="w-6 h-6" />
           </div>
           <div className="text-left">
-            <h1 className="font-display font-extrabold text-lg text-white tracking-wider uppercase">
-              SHRIMPMATE SCADA
+            <h1 className="font-bold text-lg text-white tracking-tight">
+              ShrimpMate <span className="text-[#FB923C]">SCADA</span>
             </h1>
-            <p className="text-[11px] text-neutral-400 font-mono-num uppercase tracking-widest">
+            <p className="text-[11px] text-[#7CF994] font-semibold uppercase tracking-wider">
               Hệ Sinh Thái Nuôi Tôm Thông Minh
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md z-10">
-        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 sm:p-8 shadow-2xl relative">
-          <div className="mb-6 border-b border-neutral-800 pb-4">
-            <h2 className="text-base font-bold text-white uppercase tracking-wide flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-emerald-400" />
-              Đăng Nhập Điều Hành
+      <div className="mt-5 sm:mx-auto sm:w-full sm:max-w-md z-10">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-xl relative">
+          <div className="mb-6 border-b border-slate-100 pb-4">
+            <h2 className="text-base font-bold text-[#0B1C30] flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-[#EA580C]" />
+              Đăng nhập hệ thống điều hành
             </h2>
-            <p className="text-xs text-neutral-400 mt-1">
-              Nhập Email hoặc Số điện thoại để truy cập trung tâm SCADA.
+            <p className="text-xs text-slate-500 mt-1">
+              Nhập Email hoặc Số điện thoại để truy cập trung tâm quản lý trang trại & SCADA.
             </p>
           </div>
 
           {/* Thông báo lỗi */}
           {errorMessage && (
-            <div className="mb-4 p-3 bg-red-950/60 border border-red-800 text-red-300 rounded-xl text-xs flex items-start gap-2.5 leading-relaxed">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />
+            <div className="mb-4 p-3.5 bg-[#FFDAD6]/60 border border-[#BA1A1A]/30 text-[#93000A] rounded-xl text-xs font-medium flex items-start gap-2.5 leading-relaxed">
+              <AlertCircle className="w-4 h-4 shrink-0 text-[#BA1A1A] mt-0.5" />
               <span>{errorMessage}</span>
             </div>
           )}
 
           {/* Thông báo thành công từ modal OTP */}
           {successToast && (
-            <div className="mb-4 p-3 bg-emerald-950/60 border border-emerald-800 text-emerald-300 rounded-xl text-xs flex items-start gap-2.5 leading-relaxed">
-              <Sparkles className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
+            <div className="mb-4 p-3.5 bg-[#E8F5E9] border border-[#7CF994] text-[#006E2D] rounded-xl text-xs font-medium flex items-start gap-2.5 leading-relaxed">
+              <Sparkles className="w-4 h-4 shrink-0 text-[#006E2D] mt-0.5" />
               <span>{successToast}</span>
             </div>
           )}
@@ -122,17 +122,17 @@ export const LoginPage = () => {
           <form onSubmit={handleLogin} className="space-y-4">
             {/* Input Identifier */}
             <div>
-              <label className="block text-xs font-semibold text-neutral-300 mb-1.5 uppercase tracking-wider font-mono-num">
-                Email hoặc Số Điện Thoại
+              <label className="block text-xs font-bold text-[#0B1C30] mb-1.5">
+                Email hoặc Số điện thoại
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder="admin@shrimpmate.local hoặc 0901234567"
-                  className="w-full bg-neutral-950 pl-9 pr-3 py-2.5 text-xs text-white border border-neutral-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/80 focus:border-transparent placeholder:text-neutral-600 transition"
+                  className="w-full bg-[#F8F9FF] pl-10 pr-3.5 py-2.5 text-xs text-[#0B1C30] font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#EA580C]/20 focus:border-[#EA580C] placeholder:text-slate-400 transition"
                   required
                 />
               </div>
@@ -141,31 +141,31 @@ export const LoginPage = () => {
             {/* Input Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-neutral-300 uppercase tracking-wider font-mono-num">
-                  Mật Khẩu
+                <label className="block text-xs font-bold text-[#0B1C30]">
+                  Mật khẩu
                 </label>
                 <button
                   type="button"
                   onClick={() => setIsForgotModalOpen(true)}
-                  className="text-xs text-neutral-400 hover:text-emerald-400 transition"
+                  className="text-xs font-semibold text-[#006398] hover:text-[#EA580C] transition cursor-pointer"
                 >
                   Quên mật khẩu?
                 </button>
               </div>
               <div className="relative">
-                <Lock className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-neutral-950 pl-9 pr-10 py-2.5 text-xs text-white border border-neutral-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/80 focus:border-transparent placeholder:text-neutral-600 transition"
+                  className="w-full bg-[#F8F9FF] pl-10 pr-10 py-2.5 text-xs text-[#0B1C30] font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#EA580C]/20 focus:border-[#EA580C] placeholder:text-slate-400 transition"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -177,7 +177,7 @@ export const LoginPage = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full h-10 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-emerald-950 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                className="w-full h-11 bg-gradient-to-r from-[#FB923C] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] active:scale-[0.99] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-[#EA580C]/25 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
@@ -195,39 +195,39 @@ export const LoginPage = () => {
           </form>
 
           {/* Quick Fill Demo Seed Accounts */}
-          <div className="mt-6 pt-5 border-t border-neutral-800/80">
-            <div className="flex items-center justify-between text-[11px] text-neutral-400 font-mono-num mb-2.5">
-              <span>Tài khoản Seed mẫu Backend:</span>
-              <span className="text-[10px] bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-300">
-                1-Click Test
+          <div className="mt-6 pt-5 border-t border-slate-100">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 font-semibold mb-2.5">
+              <span>Tài khoản mẫu (Quick Fill):</span>
+              <span className="text-[10px] bg-[#FFF8F5] border border-[#FFDBCA] px-2 py-0.5 rounded-full text-[#EA580C] font-bold">
+                1-Click Demo
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs font-mono-num">
+            <div className="grid grid-cols-2 gap-2.5 text-xs">
               <button
                 type="button"
                 onClick={() => handleQuickFill('admin@shrimpmate.local', 'Admin@123456')}
-                className="px-2.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 hover:border-red-900/50 text-neutral-300 hover:text-white transition text-left cursor-pointer flex flex-col"
+                className="px-3 py-2.5 rounded-xl bg-[#FFF8F5] hover:bg-[#FFDBCA]/50 border border-[#FFDBCA] text-left transition cursor-pointer flex flex-col"
               >
-                <span className="text-[10px] font-bold text-red-400 uppercase">Quản trị viên (Admin)</span>
-                <span className="text-[11px] text-neutral-400 truncate">admin@shrimpmate...</span>
+                <span className="text-[10px] font-bold text-[#EA580C] uppercase">Quản trị viên (Admin)</span>
+                <span className="text-[11px] text-[#9D4300] font-mono-num truncate mt-0.5">admin@shrimpmate...</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleQuickFill('farmer@shrimpmate.local', 'Farmer@123456')}
-                className="px-2.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 hover:border-emerald-900/50 text-neutral-300 hover:text-white transition text-left cursor-pointer flex flex-col"
+                className="px-3 py-2.5 rounded-xl bg-[#E8F5E9]/70 hover:bg-[#E8F5E9] border border-[#7CF994] text-left transition cursor-pointer flex flex-col"
               >
-                <span className="text-[10px] font-bold text-emerald-400 uppercase">Người nuôi (Farmer)</span>
-                <span className="text-[11px] text-neutral-400 truncate">farmer@shrimpmate...</span>
+                <span className="text-[10px] font-bold text-[#006E2D] uppercase">Người nuôi (Farmer)</span>
+                <span className="text-[11px] text-slate-600 font-mono-num truncate mt-0.5">farmer@shrimpmate...</span>
               </button>
             </div>
           </div>
 
           {/* Đăng ký Quản lý */}
-          <div className="mt-6 text-center text-xs text-neutral-400">
+          <div className="mt-6 text-center text-xs text-slate-500">
             Bạn là Quản lý trang trại mới?{' '}
             <Link
               to="/register"
-              className="text-emerald-400 hover:text-emerald-300 font-semibold hover:underline"
+              className="text-[#EA580C] hover:text-[#9D4300] font-bold hover:underline"
             >
               Đăng ký tài khoản Quản lý (Manager)
             </Link>
@@ -235,9 +235,9 @@ export const LoginPage = () => {
         </div>
 
         {/* Footer ghi chú hệ thống */}
-        <div className="mt-6 text-center text-[11px] text-neutral-600 font-mono-num flex items-center justify-center gap-2">
-          <Waves className="w-3.5 h-3.5 text-neutral-500" />
-          <span>ShrimpMate SCADA Gateway • JWT Stateless RBAC</span>
+        <div className="mt-5 text-center text-[11px] text-slate-500 font-mono-num flex items-center justify-center gap-2">
+          <Waves className="w-3.5 h-3.5 text-[#006398]" />
+          <span>ShrimpMate SCADA Gateway • Mobile-Synced UI</span>
         </div>
       </div>
 

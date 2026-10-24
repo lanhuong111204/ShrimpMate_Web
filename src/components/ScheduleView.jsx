@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { 
-  Sparkles, 
+  SlidersHorizontal, 
   RotateCcw, 
   Save, 
   Check, 
-  HardDrive, 
-  Play
+  Play,
+  ShieldCheck,
+  CalendarClock,
+  Zap
 } from 'lucide-react';
-import { feedingService } from '../services/feedingService';
-import { safetyRuleService } from '../services/safetyRuleService';
+import { useAuth } from '../contexts/AuthContext';
 
 export const ScheduleView = ({
   schedule,
@@ -16,23 +17,25 @@ export const ScheduleView = ({
   onUpdateSchedule,
   onUpdateSafetyRules,
   onShowToast,
-  pondCode = 'Ao Kỹ Thuật Số 02',
-  pondArea = '4.200 m²',
+  pondCode = 'Ao Bạt A1',
+  pondArea = '1.500 m²',
 }) => {
+  const { role } = useAuth();
+  const canEdit = role === 'manager' || role === 'admin';
   const [aiApplied, setAiApplied] = useState(true);
   const [isSyncingHw, setIsSyncingHw] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState('Hôm nay, 10:30:15');
+  const [lastSyncTime, setLastSyncTime] = useState('Hôm nay, 14:15:10');
 
   // Compute totals
   const totalKg = schedule.reduce((sum, item) => (item.enabled ? sum + item.weightKg : sum), 0);
-  const sprayedKg = 38.4;
+  const sprayedKg = 32.3;
   const remainingKg = Math.max(0, totalKg - sprayedKg);
 
   // Stepper logic
   const handleStepWeight = (mealId, delta) => {
     const updated = schedule.map((item) => {
       if (item.id === mealId) {
-        const next = Math.max(5, parseFloat((item.weightKg + delta).toFixed(1)));
+        const next = Math.max(2, parseFloat((item.weightKg + delta).toFixed(1)));
         return { ...item, weightKg: next };
       }
       return item;
@@ -57,26 +60,20 @@ export const ScheduleView = ({
   const handleApplyAi = () => {
     const updated = schedule.map((item) => {
       if (item.id === 3) {
-        return { ...item, weightKg: 28.0, aiAddedKg: 3.0 };
+        return { ...item, weightKg: 12.6, aiAddedKg: 0.6 };
       }
       return item;
     });
     setAiApplied(true);
     onUpdateSchedule(updated);
-    onShowToast('Đã áp dụng đề xuất của AI Bio-Acoustic (+3.0 kg cho Cữ 3)!', 'success');
+    onShowToast('Đã áp dụng gợi ý AI ShrimpMate-FeedOpt-v2 (+5% lượng cám Cữ 3).', 'success');
   };
 
   // Reset Default
   const handleResetDefault = () => {
     const updated = schedule.map((item) => {
       if (item.id === 3) {
-        return { ...item, weightKg: 25.0, aiAddedKg: 0 };
-      }
-      if (item.id === 2) {
-        return { ...item, weightKg: 22.0 };
-      }
-      if (item.id === 4) {
-        return { ...item, weightKg: 25.0 };
+        return { ...item, weightKg: 12.0, aiAddedKg: 0 };
       }
       return item;
     });
@@ -100,19 +97,19 @@ export const ScheduleView = ({
     });
     onUpdateSafetyRules(updated);
     const changed = updated.find((r) => r.id === ruleId);
-    onShowToast(`Rơ-le an toàn "${changed?.title}": ${changed?.status}`, 'info');
+    onShowToast(`Quy tắc an toàn "${changed?.title}": ${changed?.enabled ? 'Đang bật' : 'Đã tắt'}`, 'info');
   };
 
   // Pulse test for feeder
   const handlePulseTest = (mealId) => {
-    onShowToast(`[LỆNH THỬ NGHIỆM]: Kích hoạt xung biến tần Cữ ${mealId} trong 5 giây để kiểm tra mâm xoay.`, 'info');
+    onShowToast(`Kích hoạt chạy thử xung Cữ ${mealId} trong 5 giây để kiểm tra mâm xoay.`, 'info');
   };
 
-  // Master Offline Hardware Sync (EEPROM AT24C256)
+  // Sync schedule to controller
   const handleMasterSync = () => {
     if (isSyncingHw) return;
     setIsSyncingHw(true);
-    onShowToast('Đang biên dịch payload AES-128 và ghi trực tiếp vào chip nhớ EEPROM bờ ao...', 'info');
+    onShowToast('Đang đồng bộ lịch cho ăn và quy tắc an toàn xuống tủ điều khiển...', 'info');
 
     setTimeout(() => {
       setIsSyncingHw(false);
@@ -120,649 +117,355 @@ export const ScheduleView = ({
       const pad = (n) => n.toString().padStart(2, '0');
       const timeStr = `Hôm nay, ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
       setLastSyncTime(timeStr);
-      onShowToast('ĐÃ GHI THÀNH CÔNG VÀO BỘ NHỚ TỦ MÁY RTC (12ms độ trễ)!', 'success');
-    }, 1200);
+      onShowToast('Đã lưu và đồng bộ thành công xuống tủ điều khiển tại ao.', 'success');
+    }, 1000);
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* PAGE HEADER TITLE & STATUS BADGES */}
-      <div className="rounded-xl border border-slate-200/90 bg-white p-5 md:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2 py-0.5 rounded bg-slate-950 text-white font-mono-num text-[10px] font-semibold uppercase tracking-wider">
-              Module Điều Khiển Cấp Cám
-            </span>
-            <span className="text-xs font-mono-num text-slate-500">
-              Ao Nuôi: {pondCode} ({pondArea})
+    <div className="space-y-5">
+      {/* PAGE HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-xl font-bold text-[#0B1C30] tracking-tight font-display">
+              Lịch cho ăn tự động & Cân đối khẩu phần AI
+            </h1>
+            <span className="px-3 py-1 rounded-full bg-[#EFF4FF] border border-[#D3E4FE] text-xs font-bold text-[#006398]">
+              {pondCode} ({pondArea})
             </span>
           </div>
-          <h1 className="text-lg md:text-xl font-display font-bold text-slate-950 tracking-tight">
-            Lên Lịch Ăn Tự Động & Mô Hình Cân Đối AI
-          </h1>
-          <p className="text-xs text-slate-500 leading-relaxed max-w-3xl">
-            Hệ thống phân bổ cám thích ứng theo âm thanh bắt mồi (Hydrophone) và quy tắc khóa an toàn phần cứng tủ máy.
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            Thiết lập định mức 4 cữ ăn trong ngày, tự động điều chỉnh theo chỉ số thèm ăn FIS và Safety Rule Engine.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 font-mono-num text-xs shrink-0 flex-wrap">
-          <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 flex items-center gap-2">
-            <HardDrive className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-600">
-              EEPROM CRC: <strong className="text-slate-900 font-semibold">0x7F4A</strong>
-            </span>
-          </div>
-          <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-3 py-1.5 text-emerald-800 flex items-center gap-2 font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            <span>RTC ĐỘC LẬP: HOẠT ĐỘNG</span>
+        <div className="flex items-center gap-2 text-xs shrink-0">
+          <div className="rounded-full border border-[#7CF994] bg-[#E8F5E9] px-3.5 py-1.5 text-[#006E2D] flex items-center gap-2 font-bold">
+            <span className="w-2 h-2 rounded-full bg-[#006E2D]" />
+            <span>Bộ hẹn giờ độc lập: Hoạt động</span>
           </div>
         </div>
       </div>
 
-      {/* 1. TỔNG QUAN KHẨU PHẦN NGÀY & ĐỀ XUẤT AI ADAPTIVE FEEDING */}
-      <section className="rounded-xl border border-slate-200/90 bg-white p-5 md:p-6 shadow-sm space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
-          <div className="flex items-center gap-2.5">
-            <span className="w-1.5 h-4 bg-slate-900 rounded-full inline-block"></span>
-            <h2 className="font-display font-bold text-sm md:text-base text-slate-900 uppercase tracking-wide">
-              1. Tổng Quan Khẩu Phần Ngày & AI Cân Đối Tự Động
-            </h2>
+      {/* 1. AI FEED RECOMMENDATION BANNER (Synced with Mobile & Stitch) */}
+      <section className="rounded-2xl border border-[#FFDBCA] bg-[#FFF8F5] p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-2xs">
+        <div className="flex items-start gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FB923C] to-[#EA580C] text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Zap className="w-5 h-5" />
           </div>
-          <div className="font-mono-num text-xs text-slate-500">
-            Loại cám: <strong className="text-slate-800 font-semibold">Grobest High-Protein 2.2mm</strong> • Ngày nuôi:{' '}
-            <strong className="text-slate-800 font-semibold">42 Ngày</strong>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-[#9D4300]">
+                Gợi ý Khẩu phần AI (ShrimpMate-FeedOpt-v2)
+              </span>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white text-[#EA580C] border border-[#FFDBCA]">
+                Độ tin cậy 94%
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-[#0B1C30] leading-relaxed">
+              Dựa trên tuổi tôm <strong>45 DOC</strong>, nhiệt độ <strong>28.5°C</strong> và chỉ số thèm ăn <strong>FIS = Mức 3 (Ăn mạnh - sạch nhá 92%)</strong>, hệ thống đề xuất tăng <strong>+5%</strong> định mức cữ chiều (14:30) từ 12.0 kg lên <strong>12.6 kg</strong>.
+            </p>
           </div>
         </div>
 
-        {/* METRIC KPI CARDS */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button
+            onClick={handleApplyAi}
+            disabled={!canEdit}
+            className={`h-9 px-4 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+              aiApplied
+                ? 'bg-[#006E2D] hover:bg-[#005320] text-white'
+                : 'bg-[#EA580C] hover:bg-[#C2410C] text-white'
+            } ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+          >
+            {aiApplied ? <Check className="w-4 h-4" /> : <SlidersHorizontal className="w-4 h-4" />}
+            <span>{aiApplied ? 'Đã áp dụng (+5% Cữ 3)' : 'Áp dụng đề xuất (+5%)'}</span>
+          </button>
+
+          <button
+            onClick={handleResetDefault}
+            disabled={!canEdit}
+            className={`h-9 px-3 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 transition cursor-pointer flex items-center gap-1.5 ${
+              !canEdit ? 'opacity-60 cursor-not-allowed' : ''
+            }`}
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+            <span>Mặc định</span>
+          </button>
+        </div>
+      </section>
+
+      {/* 2. DAILY FEED SUMMARY KPIs */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="w-4 h-4 text-[#EA580C]" />
+            <h2 className="text-sm font-bold text-[#0B1C30]">
+              Tổng quan khẩu phần ngày
+            </h2>
+          </div>
+          <div className="text-xs text-slate-500">
+            Loại cám: <strong className="text-[#0B1C30] font-bold">Grobest High-Protein Số 2 (1.8mm)</strong> • Tuổi tôm:{' '}
+            <strong className="text-[#EA580C] font-bold font-mono-num">45 DOC</strong>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Metric 1 */}
-          <div className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 transition-all">
-            <div className="font-mono-num text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              KẾ HOẠCH CẢ NGÀY (KG)
+          <div className="rounded-xl border border-slate-200 border-l-4 border-l-[#EA580C] bg-[#F8F9FF] p-4">
+            <div className="text-xs font-bold uppercase text-slate-500">
+              Tổng kế hoạch 4 cữ
             </div>
             <div className="flex items-baseline gap-1.5 mt-2">
-              <span className="font-display text-3xl font-bold tracking-tight text-slate-950 font-mono-num">
+              <span className="text-2xl font-extrabold text-[#0B1C30] font-mono-num">
                 {totalKg.toFixed(1)}
               </span>
               <span className="font-mono-num text-xs font-semibold text-slate-500">kg</span>
             </div>
-            <div className="mt-3 text-xs text-slate-500 font-mono-num flex items-center justify-between border-t border-slate-200/60 pt-2.5">
-              <span>Định mức sinh khối:</span>
-              <span className="font-semibold text-slate-800">~4.2 Tấn tôm</span>
+            <div className="mt-3 text-xs text-slate-500 flex items-center justify-between border-t border-slate-200/60 pt-2">
+              <span>Sinh khối ước tính:</span>
+              <span className="font-bold text-[#0B1C30] font-mono-num">~3.8 tấn tôm</span>
             </div>
           </div>
 
-          {/* Metric 2 */}
-          <div className="rounded-xl border border-slate-200/80 bg-white p-4 transition-all">
-            <div className="font-mono-num text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              ĐÃ RẢI THỰC TẾ (KG)
+          <div className="rounded-xl border border-slate-200 border-l-4 border-l-[#006E2D] bg-white p-4">
+            <div className="text-xs font-bold uppercase text-slate-500">
+              Đã rải thực tế
             </div>
             <div className="flex items-baseline gap-1.5 mt-2">
-              <span className="font-display text-3xl font-bold tracking-tight text-slate-950 font-mono-num">
+              <span className="text-2xl font-extrabold text-[#006E2D] font-mono-num">
                 {sprayedKg.toFixed(1)}
               </span>
               <span className="font-mono-num text-xs font-semibold text-slate-500">
                 / {totalKg.toFixed(1)} kg
               </span>
             </div>
-            <div className="mt-3 text-xs font-mono-num flex items-center justify-between border-t border-slate-200/60 pt-2.5">
-              <span className="text-slate-500">Tiến độ cữ 1 & 2:</span>
-              <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px]">
-                {((sprayedKg / totalKg) * 100).toFixed(1)}% ĐÃ PHUN
+            <div className="mt-3 text-xs flex items-center justify-between border-t border-slate-200/60 pt-2">
+              <span className="text-slate-500">Tiến độ hôm nay:</span>
+              <span className="font-bold text-[#006E2D] bg-[#E8F5E9] px-2 py-0.5 rounded-full text-[11px] font-mono-num">
+                {((sprayedKg / totalKg) * 100).toFixed(1)}%
               </span>
             </div>
           </div>
 
-          {/* Metric 3 */}
-          <div className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 transition-all">
-            <div className="font-mono-num text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              LƯỢNG CÒN LẠI (CỮ 3 & 4)
+          <div className="rounded-xl border border-slate-200 border-l-4 border-l-[#006398] bg-[#F8F9FF] p-4">
+            <div className="text-xs font-bold uppercase text-slate-500">
+              Lượng còn lại trong ngày
             </div>
             <div className="flex items-baseline gap-1.5 mt-2">
-              <span className="font-display text-3xl font-bold tracking-tight text-slate-950 font-mono-num">
+              <span className="text-2xl font-extrabold text-[#006398] font-mono-num">
                 {remainingKg.toFixed(1)}
               </span>
               <span className="font-mono-num text-xs font-semibold text-slate-500">kg</span>
             </div>
-            <div className="mt-3 text-xs text-slate-500 font-mono-num flex items-center justify-between border-t border-slate-200/60 pt-2.5">
-              <span>Tồn phễu chứa bờ:</span>
-              <span className="font-semibold text-slate-800">62.0 kg (Đủ cám)</span>
+            <div className="mt-3 text-xs text-slate-500 flex items-center justify-between border-t border-slate-200/60 pt-2">
+              <span>Tồn phễu chứa:</span>
+              <span className="font-bold text-[#006E2D] font-mono-num">58.0 kg (Đủ cám)</span>
             </div>
           </div>
         </div>
 
-        {/* PROGRESS DISTRIBUTION BAR */}
-        <div className="space-y-2 pt-1">
-          <div className="flex flex-wrap justify-between text-xs font-mono-num text-slate-600 gap-1">
-            <span>
-              Phân bổ:{' '}
-              <strong className="text-slate-900 font-semibold">Cữ 1 ({schedule[0]?.weightKg}kg ✓)</strong> •{' '}
-              <strong className="text-slate-900 font-semibold">Cữ 2 (18.4/{schedule[1]?.weightKg}kg)</strong> •{' '}
-              <span className="text-slate-500">Cữ 3 ({schedule[2]?.weightKg}kg)</span> •{' '}
-              <span className="text-slate-500">Cữ 4 ({schedule[3]?.weightKg}kg)</span>
-            </span>
-            <span className="font-semibold text-slate-900">
-              {totalKg.toFixed(1)} kg / 4 Cữ
-            </span>
-          </div>
-
-          <div className="w-full h-2.5 rounded-full bg-slate-100 flex overflow-hidden p-0.5 gap-0.5 border border-slate-200/70">
+        {/* Multi-segment progress bar */}
+        <div className="space-y-1.5">
+          <div className="w-full h-2.5 rounded-full bg-[#FFDBCA]/60 flex overflow-hidden p-0.5 gap-0.5">
             <div
-              className="bg-slate-900 rounded-l-full h-full transition-all"
+              className="bg-[#006E2D] rounded-l-full h-full transition-all"
               style={{ width: `${(schedule[0]?.weightKg / totalKg) * 100}%` }}
-              title="Cữ 1: Đã rải xong"
             />
             <div
-              className="bg-slate-500 h-full transition-all"
+              className="bg-[#006E2D] h-full transition-all"
               style={{ width: `${(schedule[1]?.weightKg / totalKg) * 100}%` }}
-              title="Cữ 2: Đang phun"
             />
             <div
-              className="bg-slate-300 h-full transition-all"
+              className="bg-[#EA580C] h-full transition-all"
               style={{ width: `${(schedule[2]?.weightKg / totalKg) * 100}%` }}
-              title="Cữ 3: Chờ phun"
             />
             <div
-              className="bg-slate-200 rounded-r-full h-full transition-all"
+              className="bg-[#FFDBCA] rounded-r-full h-full transition-all"
               style={{ width: `${(schedule[3]?.weightKg / totalKg) * 100}%` }}
-              title="Cữ 4: Chờ phun"
             />
           </div>
         </div>
+      </section>
 
-        {/* AI ADAPTIVE FEEDING MODEL PROMPT BOX */}
-        <div className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-4.5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1.5 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono-num text-[10px] font-semibold uppercase">
-                AI Bio-Acoustic Engine
-              </span>
-              <span className="font-mono-num text-xs text-slate-600 font-medium">
-                Dự Báo & Điều Chỉnh Thích Ứng (11:30)
-              </span>
-            </div>
-            <p className="text-xs md:text-sm text-slate-700 leading-relaxed">
-              Cảm biến sóng âm <strong>Hydrophone</strong> ghi nhận nhịp ăn sạch nhá đạt <strong>100%</strong> sau 38
-              phút ở Cữ 1. Cảm biến môi trường: Oxy <strong>5.8 mg/L</strong>, Nhiệt độ nước <strong>29.4°C</strong> (lý
-              tưởng).
-              <span className="font-semibold text-slate-900">
-                {' '}
-                Đề xuất: Tự động TĂNG +3.0 kg cho Cữ 3 (14:30) và GIỮ NGUYÊN Cữ 4 để ngừa thiếu oxy đêm.
-              </span>
+      {/* 3. 4-MEAL SCHEDULE CONFIGURATION CARDS */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
+          <div>
+            <h2 className="text-sm font-bold text-[#0B1C30]">
+              Cấu hình chi tiết 4 cữ ăn trong ngày
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Điều chỉnh khối lượng cám và kiểm tra thông số xung phun cho từng khung giờ
             </p>
           </div>
-
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            <button
-              onClick={handleApplyAi}
-              className={`px-4 py-2 rounded-xl font-mono-num text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-[0.98] cursor-pointer ${
-                aiApplied
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                  : 'bg-slate-900 hover:bg-slate-800 text-white'
-              }`}
-            >
-              {aiApplied ? <Check className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
-              <span>{aiApplied ? 'Đã Chấp Thuận (+3kg Cữ 3)' : 'Áp Dụng Đề Xuất (+3kg Cữ 3)'}</span>
-            </button>
-
-            <button
-              onClick={handleResetDefault}
-              className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-mono-num text-xs font-semibold border border-slate-200 transition-colors cursor-pointer flex items-center gap-1"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Đặt Lại</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. LƯỚI CẤU HÌNH 4 CỮ ĂN TRONG NGÀY */}
-      <section className="rounded-xl border border-slate-200/90 bg-white p-5 md:p-6 shadow-sm space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
-          <div className="flex items-center gap-2.5">
-            <span className="w-1.5 h-4 bg-slate-900 rounded-full inline-block"></span>
-            <h2 className="font-display font-bold text-sm md:text-base text-slate-900 uppercase tracking-wide">
-              2. Lưới Cấu Hình 4 Cữ Ăn Trong Ngày (Timeline & Motor Stepper)
-            </h2>
-          </div>
-          <div className="flex items-center gap-2 text-xs font-mono-num">
-            <span className="text-slate-400">Chế độ quăng:</span>
-            <span className="rounded-md border border-slate-200 px-2 py-0.5 bg-slate-50 font-semibold text-slate-800">
-              XUNG BIẾN TẦN CHỐNG KẸT
-            </span>
-          </div>
+          <span className="rounded-full border border-[#FFDBCA] px-3 py-1 bg-[#FFF8F5] text-xs font-bold text-[#9D4300]">
+            Chế độ xung biến tần chống kẹt
+          </span>
         </div>
 
-        {/* 4-MEAL GRID CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {/* Cữ 1: SÁNG SỚM */}
-          <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-4.5 flex flex-col justify-between space-y-4">
-            <div className="space-y-3.5">
-              <div className="flex items-start justify-between border-b border-slate-100 pb-2.5">
-                <div>
-                  <div className="font-mono-num text-[10px] text-slate-400 uppercase font-semibold">
-                    Cữ 1 • SÁNG SỚM
-                  </div>
-                  <div className="font-display text-2xl font-bold text-slate-900 mt-0.5 tracking-tight">
-                    07:00
-                  </div>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className="font-mono-num text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold uppercase">
-                    ĐÃ XONG
-                  </span>
-                  <label className="inline-flex items-center gap-1.5 mt-1.5 cursor-not-allowed opacity-60">
-                    <input
-                      type="checkbox"
-                      checked={true}
-                      disabled
-                      className="h-3.5 w-3.5 rounded text-slate-900 border-slate-300 focus:ring-0"
-                    />
-                    <span className="font-mono-num text-[10px] text-slate-500">Bật</span>
-                  </label>
-                </div>
-              </div>
+          {schedule.map((meal) => {
+            const isCompleted = meal.status === 'completed';
+            const isActive = meal.status === 'active';
 
-              {/* Weight Display */}
-              <div className="rounded-xl border border-slate-200/70 bg-white p-3 space-y-2">
-                <div className="flex justify-between items-baseline">
-                  <span className="font-mono-num text-[11px] text-slate-400 uppercase font-medium">
-                    Khối lượng:
-                  </span>
-                  <div className="font-mono-num">
-                    <span className="text-2xl font-bold text-slate-900">20.0</span>
-                    <span className="text-xs text-slate-400 font-semibold ml-0.5">kg</span>
-                  </div>
-                </div>
-                <div className="flex gap-1.5 pt-1">
-                  <button
-                    disabled
-                    className="flex-1 py-1 rounded-lg bg-slate-50 border border-slate-200 font-mono-num text-xs font-semibold text-slate-300 cursor-not-allowed"
-                  >
-                    -2kg
-                  </button>
-                  <button
-                    disabled
-                    className="flex-1 py-1 rounded-lg bg-slate-50 border border-slate-200 font-mono-num text-xs font-semibold text-slate-300 cursor-not-allowed"
-                  >
-                    +2kg
-                  </button>
-                </div>
-              </div>
-
-              {/* Parameters */}
-              <div className="space-y-1.5 font-mono-num text-xs text-slate-600">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Thời gian phun:</span>
-                  <span className="font-medium text-slate-800">25 Phút (07:00 - 07:25)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Nhịp xung:</span>
-                  <span className="font-medium text-slate-800">4s Phun / 25s Nghỉ</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Tần số mâm:</span>
-                  <span className="font-medium text-slate-800">38 Hz (~8.0 m)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Kiểm tra nhá:</span>
-                  <span className="text-emerald-600 font-semibold">Sạch 100%</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-100 pt-2.5">
-              <div className="font-mono-num text-[11px] text-slate-400 text-center py-1 rounded-lg bg-slate-100/70 border border-slate-200/50">
-                Nhật ký: Đã nạp vào RTC thành công
-              </div>
-            </div>
-          </div>
-
-          {/* Cữ 2: BUỔI TRƯA (ACTIVE) */}
-          <div className="rounded-xl border-2 border-slate-950 bg-white p-4.5 flex flex-col justify-between space-y-4 shadow-sm relative">
-            <div className="absolute -top-2.5 left-4 bg-slate-950 text-white font-mono-num text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wider">
-              ● Đang Phun
-            </div>
-
-            <div className="space-y-3.5 pt-1">
-              <div className="flex items-start justify-between border-b border-slate-100 pb-2.5">
-                <div>
-                  <div className="font-mono-num text-[10px] text-slate-400 uppercase font-semibold">
-                    Cữ 2 • TRƯA
-                  </div>
-                  <div className="font-display text-2xl font-bold text-slate-900 mt-0.5 tracking-tight">
-                    10:30
-                  </div>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className="font-mono-num text-[10px] px-2 py-0.5 rounded bg-slate-900 text-white font-semibold uppercase animate-pulse">
-                    CHẠY: 84%
-                  </span>
-                  <label className="inline-flex items-center gap-1.5 mt-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={schedule[1]?.enabled}
-                      onChange={() => handleToggleMeal(2)}
-                      className="h-3.5 w-3.5 rounded text-slate-900 border-slate-300 focus:ring-0 cursor-pointer"
-                    />
-                    <span className="font-mono-num text-[10px] text-slate-700 font-semibold">Bật</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Weight Display & Stepper */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
-                <div className="flex justify-between items-baseline">
-                  <span className="font-mono-num text-[11px] text-slate-500 uppercase font-medium">
-                    Tiến độ cám:
-                  </span>
-                  <div className="font-mono-num">
-                    <span className="text-2xl font-bold text-slate-950">
-                      {schedule[1]?.weightKg.toFixed(1)}
-                    </span>
-                    <span className="text-xs text-slate-500 font-semibold ml-0.5">kg</span>
-                  </div>
-                </div>
-                <div className="text-[11px] font-mono-num text-slate-500 flex justify-between">
-                  <span>
-                    Đã văng: <strong className="text-slate-900">18.4 kg</strong>
-                  </span>
-                  <span>
-                    Còn:{' '}
-                    <strong className="text-slate-900">
-                      {Math.max(0, schedule[1]?.weightKg - 18.4).toFixed(1)} kg
-                    </strong>
-                  </span>
-                </div>
-                <div className="flex gap-1.5 pt-1">
-                  <button
-                    onClick={() => handleStepWeight(2, -2)}
-                    className="flex-1 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 font-mono-num text-xs font-semibold text-slate-900 active:scale-95 transition-all shadow-xs cursor-pointer"
-                  >
-                    -2kg
-                  </button>
-                  <button
-                    onClick={() => handleStepWeight(2, 2)}
-                    className="flex-1 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 font-mono-num text-xs font-semibold text-slate-900 active:scale-95 transition-all shadow-xs cursor-pointer"
-                  >
-                    +2kg
-                  </button>
-                </div>
-              </div>
-
-              {/* Parameters */}
-              <div className="space-y-1.5 font-mono-num text-xs text-slate-600">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Thời gian phun:</span>
-                  <span className="font-medium text-slate-800">25 Phút (10:30 - 10:55)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Nhịp xung:</span>
-                  <span className="font-medium text-slate-800">5s Phun / 20s Nghỉ</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Tần số mâm:</span>
-                  <span className="font-medium text-slate-800">42 Hz (~9.5 m)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Dòng motor:</span>
-                  <span className="font-medium text-slate-800">1.82 A (Ổn định)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Controls for Active Meal */}
-            <div className="flex gap-1.5 pt-2 border-t border-slate-100">
-              <button
-                onClick={() => onShowToast('Cữ 2: Đã tạm dừng phun trong 10 phút để kéo nhá kiểm tra.', 'info')}
-                className="flex-1 py-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 font-mono-num text-xs font-semibold transition-colors cursor-pointer"
+            return (
+              <div
+                key={meal.id}
+                className={`rounded-2xl p-4 flex flex-col justify-between space-y-4 transition ${
+                  isActive
+                    ? 'border-2 border-[#EA580C] bg-[#FFF8F5]/60 shadow-sm'
+                    : isCompleted
+                    ? 'border border-slate-200 bg-[#F8F9FF]'
+                    : 'border border-slate-200 bg-white'
+                }`}
               >
-                Tạm Dừng
-              </button>
-              <button
-                onClick={() => onShowToast('Đã dừng cữ 2! Cám thừa được lưu vào tồn phễu.', 'warning')}
-                className="flex-1 py-2 rounded-lg border border-red-200 bg-red-50/50 hover:bg-red-50 text-red-600 font-mono-num text-xs font-semibold transition-colors cursor-pointer"
-              >
-                Ngắt Cữ 2
-              </button>
-            </div>
-          </div>
+                <div className="space-y-3.5">
+                  <div className="flex items-start justify-between border-b border-slate-200/70 pb-2.5">
+                    <div>
+                      <div className={`text-xs font-bold ${isActive ? 'text-[#EA580C]' : 'text-slate-500'}`}>
+                        {meal.label}
+                      </div>
+                      <div className="text-2xl font-extrabold text-[#0B1C30] mt-0.5 font-mono-num">
+                        {meal.time}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span
+                        className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+                          isActive
+                            ? 'bg-[#EA580C] text-white'
+                            : isCompleted
+                            ? 'bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994]'
+                            : 'bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE]'
+                        }`}
+                      >
+                        {meal.statusBadge}
+                      </span>
+                      {!isCompleted && (
+                        <label className="inline-flex items-center gap-1.5 mt-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={meal.enabled}
+                            onChange={() => handleToggleMeal(meal.id)}
+                            className="h-3.5 w-3.5 rounded text-[#EA580C] border-slate-300 focus:ring-0 cursor-pointer"
+                          />
+                          <span className="text-xs font-semibold text-slate-700">Bật</span>
+                        </label>
+                      )}
+                    </div>
+                  </div>
 
-          {/* Cữ 3: BUỔI CHIỀU */}
-          <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 flex flex-col justify-between space-y-4 shadow-sm">
-            <div className="space-y-3.5">
-              <div className="flex items-start justify-between border-b border-slate-100 pb-2.5">
-                <div>
-                  <div className="font-mono-num text-[10px] text-slate-400 uppercase font-semibold">
-                    Cữ 3 • BUỔI CHIỀU
+                  <div className="rounded-xl border border-slate-200/80 bg-white p-3 space-y-2">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xs text-slate-500 font-medium">Định mức cữ:</span>
+                      <div className="font-mono-num">
+                        <span className={`text-xl font-extrabold ${isActive ? 'text-[#EA580C]' : 'text-[#0B1C30]'}`}>
+                          {meal.weightKg.toFixed(1)}
+                        </span>
+                        <span className="text-xs text-slate-500 ml-0.5">kg</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 pt-1">
+                      <button
+                        disabled={isCompleted}
+                        onClick={() => handleStepWeight(meal.id, -1)}
+                        className={`flex-1 py-1 rounded-lg border font-mono-num text-xs font-bold transition ${
+                          isCompleted
+                            ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed'
+                            : 'bg-[#F8F9FF] hover:bg-[#FFDBCA]/40 border-slate-200 text-[#0B1C30] cursor-pointer'
+                        }`}
+                      >
+                        -1.0 kg
+                      </button>
+                      <button
+                        disabled={isCompleted}
+                        onClick={() => handleStepWeight(meal.id, 1)}
+                        className={`flex-1 py-1 rounded-lg border font-mono-num text-xs font-bold transition ${
+                          isCompleted
+                            ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed'
+                            : 'bg-[#F8F9FF] hover:bg-[#FFDBCA]/40 border-slate-200 text-[#0B1C30] cursor-pointer'
+                        }`}
+                      >
+                        +1.0 kg
+                      </button>
+                    </div>
                   </div>
-                  <div className="font-display text-2xl font-bold text-slate-900 mt-0.5 tracking-tight">
-                    14:30
-                  </div>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className="font-mono-num text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-semibold uppercase">
-                    CHỜ PHUN
-                  </span>
-                  <label className="inline-flex items-center gap-1.5 mt-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={schedule[2]?.enabled}
-                      onChange={() => handleToggleMeal(3)}
-                      className="h-3.5 w-3.5 rounded text-slate-900 border-slate-300 focus:ring-0 cursor-pointer"
-                    />
-                    <span className="font-mono-num text-[10px] text-slate-700 font-semibold">Bật</span>
-                  </label>
-                </div>
-              </div>
 
-              {/* Weight Display & Stepper */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
-                <div className="flex justify-between items-baseline">
-                  <span className="font-mono-num text-[11px] text-slate-500 uppercase font-medium">
-                    Khối lượng đặt:
-                  </span>
-                  <div className="font-mono-num">
-                    <span className="text-2xl font-bold text-slate-950">
-                      {schedule[2]?.weightKg.toFixed(1)}
-                    </span>
-                    <span className="text-xs text-slate-500 font-semibold ml-0.5">kg</span>
+                  <div className="space-y-1.5 text-xs text-slate-600">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Thời lượng:</span>
+                      <span className="font-semibold text-[#0B1C30] font-mono-num">{meal.timeRange}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Nhịp xung:</span>
+                      <span className="font-semibold text-[#0B1C30] font-mono-num">{meal.pulseConfig}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Bán kính VFD:</span>
+                      <span className="font-semibold text-[#006398] font-mono-num">
+                        {meal.discFreq} ({meal.discDistance})
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="text-[11px] font-mono-num text-slate-500 flex justify-between">
-                  <span>Chuẩn: 25.0 kg</span>
-                  {schedule[2]?.weightKg > 25 ? (
-                    <span className="text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px]">
-                      +{schedule[2].weightKg - 25}kg (AI Thêm)
-                    </span>
+
+                <div className="pt-2.5 border-t border-slate-200/70">
+                  {isCompleted ? (
+                    <div className="text-xs font-bold text-[#006E2D] text-center py-1.5 rounded-xl bg-[#E8F5E9]">
+                      ✓ Đã hoàn tất ({meal.trayCheckResult || '100%'})
+                    </div>
                   ) : (
-                    <span className="text-slate-700 font-medium">Định mức chuẩn</span>
+                    <button
+                      onClick={() => handlePulseTest(meal.id)}
+                      className={`w-full py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        isActive
+                          ? 'bg-[#EA580C] hover:bg-[#C2410C] text-white'
+                          : 'bg-[#EFF4FF] hover:bg-[#DCE9FF] text-[#006398] border border-[#D3E4FE]'
+                      }`}
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      <span>{isActive ? 'Đang rải tự động' : 'Chạy thử xung (5s)'}</span>
+                    </button>
                   )}
                 </div>
-                <div className="flex gap-1.5 pt-1">
-                  <button
-                    onClick={() => handleStepWeight(3, -2)}
-                    className="flex-1 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 font-mono-num text-xs font-semibold text-slate-900 active:scale-95 transition-all shadow-xs cursor-pointer"
-                  >
-                    -2kg
-                  </button>
-                  <button
-                    onClick={() => handleStepWeight(3, 2)}
-                    className="flex-1 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 font-mono-num text-xs font-semibold text-slate-900 active:scale-95 transition-all shadow-xs cursor-pointer"
-                  >
-                    +2kg
-                  </button>
-                </div>
               </div>
-
-              {/* Parameters */}
-              <div className="space-y-1.5 font-mono-num text-xs text-slate-600">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Thời gian phun:</span>
-                  <span className="font-medium text-slate-800">32 Phút (14:30 - 15:02)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Nhịp xung:</span>
-                  <span className="font-medium text-slate-800">5s Phun / 20s Nghỉ</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Tần số mâm:</span>
-                  <span className="font-medium text-slate-800">40 Hz (~8.8 m)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Góc rải quạt:</span>
-                  <span className="font-medium text-slate-800">180° Văng Rộng</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-slate-100">
-              <button
-                onClick={() => handlePulseTest(3)}
-                className="w-full py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-mono-num text-xs font-semibold text-slate-800 transition-colors shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <Play className="w-3.5 h-3.5 text-slate-500" />
-                <span>Chạy Thử Xung (5s)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Cữ 4: CHẬP TỐI */}
-          <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 flex flex-col justify-between space-y-4 shadow-sm">
-            <div className="space-y-3.5">
-              <div className="flex items-start justify-between border-b border-slate-100 pb-2.5">
-                <div>
-                  <div className="font-mono-num text-[10px] text-slate-400 uppercase font-semibold">
-                    Cữ 4 • CHẬP TỐI
-                  </div>
-                  <div className="font-display text-2xl font-bold text-slate-900 mt-0.5 tracking-tight">
-                    18:00
-                  </div>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className="font-mono-num text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-semibold uppercase">
-                    CHỜ PHUN
-                  </span>
-                  <label className="inline-flex items-center gap-1.5 mt-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={schedule[3]?.enabled}
-                      onChange={() => handleToggleMeal(4)}
-                      className="h-3.5 w-3.5 rounded text-slate-900 border-slate-300 focus:ring-0 cursor-pointer"
-                    />
-                    <span className="font-mono-num text-[10px] text-slate-700 font-semibold">Bật</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Weight Display & Stepper */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
-                <div className="flex justify-between items-baseline">
-                  <span className="font-mono-num text-[11px] text-slate-500 uppercase font-medium">
-                    Khối lượng đặt:
-                  </span>
-                  <div className="font-mono-num">
-                    <span className="text-2xl font-bold text-slate-950">
-                      {schedule[3]?.weightKg.toFixed(1)}
-                    </span>
-                    <span className="text-xs text-slate-500 font-semibold ml-0.5">kg</span>
-                  </div>
-                </div>
-                <div className="text-[11px] font-mono-num text-slate-500 flex justify-between">
-                  <span>Chuẩn: 25.0 kg</span>
-                  <span className="text-slate-700 font-medium">Định mức an toàn</span>
-                </div>
-                <div className="flex gap-1.5 pt-1">
-                  <button
-                    onClick={() => handleStepWeight(4, -2)}
-                    className="flex-1 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 font-mono-num text-xs font-semibold text-slate-900 active:scale-95 transition-all shadow-xs cursor-pointer"
-                  >
-                    -2kg
-                  </button>
-                  <button
-                    onClick={() => handleStepWeight(4, 2)}
-                    className="flex-1 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 font-mono-num text-xs font-semibold text-slate-900 active:scale-95 transition-all shadow-xs cursor-pointer"
-                  >
-                    +2kg
-                  </button>
-                </div>
-              </div>
-
-              {/* Parameters */}
-              <div className="space-y-1.5 font-mono-num text-xs text-slate-600">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Thời gian phun:</span>
-                  <span className="font-medium text-slate-800">28 Phút (18:00 - 18:28)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Nhịp xung:</span>
-                  <span className="font-medium text-slate-800">4s Phun / 25s Nghỉ</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Tần số mâm:</span>
-                  <span className="font-medium text-slate-800">35 Hz (~7.2 m)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Góc rải quạt:</span>
-                  <span className="font-medium text-slate-800">120° Hẹp (Tránh bờ)</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-slate-100">
-              <button
-                onClick={() => handlePulseTest(4)}
-                className="w-full py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-mono-num text-xs font-semibold text-slate-800 transition-colors shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <Play className="w-3.5 h-3.5 text-slate-500" />
-                <span>Chạy Thử Xung (5s)</span>
-              </button>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </section>
 
-      {/* 3. BỘ QUY TẮC NGẮT AN TOÀN TỰ ĐỘNG & 4. ĐỒNG BỘ PHẦN CỨNG OFFLINE */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* SECTION 3: IOT SAFETY INTERLOCKS (7 COLS) */}
-        <section className="lg:col-span-7 rounded-xl border border-slate-200/90 bg-white p-5 md:p-6 shadow-sm space-y-4">
+      {/* 4. SAFETY INTERLOCKS & CONTROLLER SYNC */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <section className="lg:col-span-7 rounded-2xl border border-slate-200 bg-white p-5 space-y-4 shadow-2xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2.5">
-              <span className="w-1.5 h-4 bg-slate-900 rounded-full inline-block"></span>
-              <h2 className="font-display font-bold text-sm md:text-base text-slate-900 uppercase tracking-wide">
-                3. Bộ Quy Tắc Ngắt An Toàn Tự Động (IoT Interlocks)
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-[#006E2D]" />
+              <h2 className="text-sm font-bold text-[#0B1C30]">
+                Quy tắc khóa liên động an toàn (Safety Rule Engine)
               </h2>
             </div>
-            <span className="font-mono-num text-xs text-slate-400 font-medium">3 Rơ-le Phần Cứng</span>
+            <span className="text-xs font-bold text-[#006E2D] bg-[#E8F5E9] px-2.5 py-0.5 rounded-full">
+              {safetyRules.filter((r) => r.enabled).length}/{safetyRules.length} Rules Active
+            </span>
           </div>
-
-          <p className="text-xs text-slate-500 font-mono-num leading-relaxed">
-            Các quy tắc được nạp trực tiếp vào mạch bảo vệ cấp 1 (Hardware Watchdog) của tủ điện tại ao. Thiết bị tự
-            động ngắt cữ ngay cả khi mất kết nối mạng.
-          </p>
 
           <div className="space-y-3">
             {safetyRules.map((rule) => (
               <div
                 key={rule.id}
-                className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 flex items-start justify-between gap-4 transition-all"
+                className="rounded-xl border border-slate-200 bg-[#F8F9FF] p-4 flex items-start justify-between gap-4"
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span
-                      className={`px-2 py-0.5 rounded font-mono-num text-[10px] font-semibold uppercase border ${
-                        rule.id === 'do-safeguard'
-                          ? 'bg-red-50 text-red-700 border-red-200'
-                          : 'bg-slate-200 text-slate-700 border-slate-300'
-                      }`}
-                    >
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono-num font-bold bg-[#FFDAD6] text-[#93000A]">
                       {rule.relayCode}
                     </span>
-                    <span className="font-sans font-semibold text-sm text-slate-900">{rule.title}</span>
+                    <span className="font-bold text-sm text-[#0B1C30]">{rule.title}</span>
                   </div>
-                  <p className="text-xs text-slate-600 leading-snug">{rule.description}</p>
-                  <div className="font-mono-num text-xs text-slate-500 pt-1">{rule.currentValText}</div>
+                  <p className="text-xs text-slate-600 leading-relaxed">{rule.description}</p>
+                  <div className="font-mono-num text-xs font-semibold text-[#006E2D] pt-0.5">
+                    {rule.currentValText}
+                  </div>
                 </div>
 
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -771,18 +474,18 @@ export const ScheduleView = ({
                       type="checkbox"
                       checked={rule.enabled}
                       onChange={() => handleToggleSafetyRule(rule.id)}
-                      className="h-4 w-4 rounded text-slate-900 border-slate-300 focus:ring-0 cursor-pointer"
+                      className="h-4 w-4 rounded text-[#006E2D] border-slate-300 focus:ring-0 cursor-pointer"
                     />
-                    <span className="font-mono-num text-xs font-semibold text-slate-800">Kích hoạt</span>
+                    <span className="text-xs font-bold text-[#0B1C30]">Kích hoạt</span>
                   </label>
                   <span
-                    className={`font-mono-num text-[10px] border px-1.5 py-0.5 rounded font-semibold ${
+                    className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold ${
                       rule.enabled
-                        ? 'text-emerald-700 border-emerald-200 bg-emerald-50'
-                        : 'text-slate-500 border-slate-200 bg-slate-100'
+                        ? 'text-[#006E2D] bg-[#E8F5E9] border border-[#7CF994]'
+                        : 'text-slate-500 bg-slate-100 border border-slate-200'
                     }`}
                   >
-                    {rule.status}
+                    {rule.enabled ? 'Đang bảo vệ' : 'Đã tắt'}
                   </span>
                 </div>
               </div>
@@ -790,75 +493,56 @@ export const ScheduleView = ({
           </div>
         </section>
 
-        {/* SECTION 4: OFFLINE EEPROM HARDWARE SYNC (5 COLS) */}
-        <section className="lg:col-span-5 rounded-xl border border-slate-200/90 bg-white p-5 md:p-6 shadow-sm flex flex-col justify-between space-y-4">
+        <section className="lg:col-span-5 rounded-2xl border border-slate-200 bg-white p-5 flex flex-col justify-between space-y-4 shadow-2xs">
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <span className="w-1.5 h-4 bg-slate-900 rounded-full inline-block"></span>
-                <h2 className="font-display font-bold text-sm md:text-base text-slate-900 uppercase tracking-wide">
-                  4. Đồng Bộ Phần Cứng Offline
-                </h2>
-              </div>
-              <span className="font-mono-num text-xs text-emerald-700 font-semibold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span> STM32 SẴN SÀNG
+              <h2 className="text-sm font-bold text-[#0B1C30]">
+                Đồng bộ lịch xuống tủ điều khiển IoT
+              </h2>
+              <span className="text-xs text-[#006E2D] font-bold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#006E2D]" />
+                Trực tuyến
               </span>
             </div>
 
             <div className="space-y-3 text-xs text-slate-600">
               <p className="leading-relaxed">
-                Toàn bộ lịch ăn 4 cữ, khối lượng cám và bộ 3 khóa an toàn sau khi đồng bộ sẽ được ghi trực tiếp vào{' '}
-                <strong>chip nhớ EEPROM tĩnh điện</strong> và vận hành theo xung nhịp <strong>RTC phần cứng bờ ao</strong>.
+                Lịch cho ăn 4 cữ, định mức khối lượng và các quy tắc Safety Rule Engine sẽ được nạp xuống tủ điều khiển tại bờ ao để đảm bảo máy vận hành chính xác ngay cả khi mất kết nối mạng.
               </p>
 
-              <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5 font-mono-num text-[11px] space-y-2">
+              <div className="rounded-xl border border-[#D3E4FE] bg-[#EFF4FF] p-3.5 space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Mã hóa nạp:</span>
-                  <span className="font-semibold text-slate-900">AES-128 / Payload v2</span>
+                  <span className="text-[#006398]">Chế độ vận hành:</span>
+                  <span className="font-bold text-[#0B1C30]">Tự động độc lập tại tủ máy</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Bộ nhớ tủ máy:</span>
-                  <span className="font-semibold text-slate-900">EEPROM AT24C256 (32KB)</span>
+                  <span className="text-[#006398]">Giao thức đồng bộ:</span>
+                  <span className="text-[#006E2D] font-bold">MQTT QoS 1 (14ms)</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Trạng thái mạng:</span>
-                  <span className="text-emerald-700 font-semibold">Hoạt động độc lập không cần Internet</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Đồng bộ gần nhất:</span>
-                  <span className="font-semibold text-slate-900">{lastSyncTime}</span>
+                  <span className="text-[#006398]">Lần đồng bộ gần nhất:</span>
+                  <span className="font-mono-num font-bold text-[#0B1C30]">{lastSyncTime}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* BIG OFFLINE SYNC BUTTON */}
-          <div className="space-y-2.5 pt-2">
+          <div className="space-y-2 pt-2">
             <button
               onClick={handleMasterSync}
               disabled={isSyncingHw}
               type="button"
-              className={`w-full py-3.5 px-4 rounded-xl font-mono-num text-xs md:text-sm font-semibold flex items-center justify-center gap-2.5 uppercase tracking-wide transition-all shadow-sm active:scale-[0.99] cursor-pointer ${
+              className={`w-full h-10 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs ${
                 isSyncingHw
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-slate-950 hover:bg-slate-800 text-white'
+                  ? 'bg-[#F59E0B] text-white'
+                  : 'bg-gradient-to-r from-[#FB923C] to-[#EA580C] hover:opacity-95 text-white'
               }`}
             >
-              {isSyncingHw ? (
-                <>
-                  <Save className="w-5 h-5 animate-spin" />
-                  <span>ĐANG GHI EEPROM & NẠP RTC TỦ MÁY...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="w-5 h-5" />
-                  <span>LƯU & ĐỒNG BỘ VÀO BỘ NHỚ TỦ MÁY RTC</span>
-                </>
-              )}
+              <Save className={`w-4 h-4 ${isSyncingHw ? 'animate-spin' : ''}`} />
+              <span>
+                {isSyncingHw ? 'Đang nạp xuống tủ điều khiển...' : 'Lưu & Đồng bộ lịch xuống tủ điều khiển'}
+              </span>
             </button>
-            <div className="font-mono-num text-[10px] text-slate-400 text-center uppercase tracking-wider">
-              Đảm bảo máy tự rải chính xác từng giây ngay cả khi mất sóng 4G/WiFi
-            </div>
           </div>
         </section>
       </div>

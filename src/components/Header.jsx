@@ -9,10 +9,11 @@ import {
   User as UserIcon, 
   Shield,
   Bell,
-  AlertTriangle
+  Waves
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ChangePasswordModal } from './auth/ChangePasswordModal';
+import { ProfileModal } from './auth/ProfileModal';
 import { alertService } from '../services/alertService';
 
 export const Header = ({
@@ -27,9 +28,9 @@ export const Header = ({
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isChangePassOpen, setIsChangePassOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Tổng kết số lượng sự cố cảnh báo
   const [alertSummary, setAlertSummary] = useState(null);
 
   useEffect(() => {
@@ -46,7 +47,6 @@ export const Header = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Đóng dropdown khi click ra ngoài
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -62,157 +62,150 @@ export const Header = ({
     navigate('/login');
   };
 
-  // Màu sắc và nhãn theo vai trò
   const getRoleBadge = (roleName) => {
     switch (roleName) {
       case 'admin':
         return {
-          label: 'ADMIN',
-          bg: 'bg-red-950/80 text-red-300 border-red-800',
+          label: 'Quản trị viên',
+          bg: 'bg-[#FFF8F5] text-[#9D4300] border-[#FFDBCA]',
         };
       case 'manager':
         return {
-          label: 'QUẢN LÝ TRẠI',
-          bg: 'bg-blue-950/80 text-blue-300 border-blue-800',
+          label: 'Quản lý trại',
+          bg: 'bg-[#EFF4FF] text-[#006398] border-[#D3E4FE]',
         };
       case 'farmer':
       default:
         return {
-          label: 'NGƯỜI NUÔI',
-          bg: 'bg-emerald-950/80 text-emerald-300 border-emerald-800',
+          label: 'Kỹ thuật viên',
+          bg: 'bg-[#E8F5E9] text-[#006E2D] border-[#7CF994]',
         };
     }
   };
 
   const roleInfo = getRoleBadge(role);
-  const displayName = user?.fullName || user?.email || 'Người dùng SCADA';
+  const displayName = user?.fullName || user?.email || 'Người vận hành';
   const initialChar = displayName.charAt(0).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-40 h-14 bg-neutral-950 text-white border-b border-neutral-800 px-3 sm:px-6 flex items-center justify-between shadow-sm select-none">
-      {/* Left: Branding & Site Info */}
-      <div className="flex items-center gap-3 md:gap-5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-white text-neutral-950 flex items-center justify-center font-display font-extrabold text-sm tracking-tight shadow-sm shrink-0">
-            SM
+    <header className="sticky top-0 z-40 h-15 bg-white text-[#0B1C30] border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between select-none shadow-2xs">
+      {/* Left: Mobile-Synced Brand Logo & Farm/Pond Selector Pills */}
+      <div className="flex items-center gap-3 md:gap-4">
+        <div
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2.5 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FB923C] to-[#EA580C] text-white flex items-center justify-center font-display font-bold text-xs tracking-tight shrink-0 shadow-xs">
+            <Waves className="w-5 h-5" />
           </div>
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="font-display font-bold text-xs tracking-wider text-white uppercase">
-                SHRIMPMATE SCADA
-              </span>
-              <span className="text-[10px] font-mono-num bg-neutral-800 text-neutral-300 px-1.5 py-0.5 rounded border border-neutral-700 font-medium">
-                v4.2 PRO
-              </span>
+          <div>
+            <div className="font-display font-bold text-sm tracking-tight text-[#0B1C30] leading-tight">
+              ShrimpMate
             </div>
-            <span className="text-[11px] text-neutral-400 font-normal truncate max-w-[180px] sm:max-w-none">
-              Trại CNC Ba Đầm – Giá Rai, Bạc Liêu
-            </span>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#EA580C]">
+              Aquaculture OS
+            </div>
           </div>
         </div>
 
-        <div className="h-5 w-px bg-neutral-800 hidden md:block" />
+        <div className="h-5 w-px bg-slate-200 hidden md:block" />
 
-        {/* Live IoT Telemetry Ping */}
-        <div className="hidden sm:flex items-center gap-3.5 text-xs font-mono-num">
-          <div className="flex items-center gap-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        {/* Mobile-Synced Ocean Blue Farm & Pond Pill + Bio Green Status Pill */}
+        <div className="hidden md:flex items-center gap-2.5 text-xs">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE] font-semibold">
+            <span className="truncate max-w-[200px]">Trại Ba Đầm – Bạc Liêu</span>
+            <span className="text-[#40A2E7]">•</span>
+            <span className="font-mono-num font-bold text-[#0B1C30] bg-white px-2 py-0.5 rounded-md border border-[#D3E4FE]">
+              {activePondCode}
             </span>
-            <span className="text-neutral-400 text-[11px]">LoRa Gateway:</span>
-            <span className="text-neutral-200 font-medium text-[11px]">915MHz OK (-68dBm)</span>
           </div>
-          <div className="h-3 w-px bg-neutral-800" />
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            <span className="text-neutral-400 text-[11px]">Sensor Phao:</span>
-            <span className="text-neutral-200 font-medium text-[11px]">4/4 Trực tuyến</span>
-          </div>
-          <div className="h-3 w-px bg-neutral-800" />
-          <div className="flex items-center gap-1.5 text-neutral-300">
-            <span className="text-neutral-400 text-[11px]">Ao tập trung:</span>
-            <span className="text-emerald-400 font-semibold text-[11px]">{activePondCode}</span>
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994] font-semibold">
+            <span className="w-2 h-2 rounded-full bg-[#006E2D]" />
+            <span>Hệ thống ổn định (4/4 Ao)</span>
           </div>
         </div>
       </div>
 
-      {/* Right: Telemetry sync + Operator Profile Dropdown + E-Stop Button */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {/* Sync telemetry button */}
+      {/* Right: Sync + Notifications + User Profile + Mobile Red E-Stop */}
+      <div className="flex items-center gap-2 sm:gap-2.5">
+        {/* Sync Button */}
         <button
           onClick={onSync}
-          title="Đồng bộ hóa tức thời dữ liệu telemetry"
-          className="flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 text-xs font-medium transition cursor-pointer"
+          title="Đồng bộ dữ liệu cảm biến"
+          className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0B1C30] border border-slate-200 text-xs font-semibold transition cursor-pointer"
         >
-          <RotateCw className={`w-3.5 h-3.5 text-neutral-400 ${isSyncing ? 'animate-spin text-emerald-400' : ''}`} />
-          <span className="font-mono-num text-[11px]">{currentTime} Đồng bộ</span>
+          <RotateCw className={`w-3.5 h-3.5 text-[#006398] ${isSyncing ? 'animate-spin text-[#EA580C]' : ''}`} />
+          <span className="font-mono-num">{currentTime}</span>
+          <span className="hidden sm:inline text-slate-600">Đồng bộ</span>
         </button>
 
-        {/* Alerts Badge Indicator */}
+        {/* Alerts Bell */}
         <button
           onClick={() => navigate('/logs')}
-          title="Xem trung tâm cảnh báo sự cố SCADA"
-          className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 transition cursor-pointer"
+          title="Xem nhật ký & cảnh báo"
+          className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-[#F8F9FF] hover:bg-[#FFF8F5] text-[#0B1C30] border border-slate-200 transition cursor-pointer"
         >
-          <Bell className="w-3.5 h-3.5 text-neutral-300" />
+          <Bell className="w-4 h-4" />
           {alertSummary?.open > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-600 text-white font-mono-num font-bold text-[9px] flex items-center justify-center animate-pulse shadow-sm">
+            <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-[#BA1A1A] text-white font-mono-num font-bold text-[10px] flex items-center justify-center">
               {alertSummary.open}
             </span>
           )}
         </button>
 
-        {/* User Profile & Account Dropdown */}
+        {/* User Profile Dropdown */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-2 pl-2 pr-1.5 py-1 rounded-lg hover:bg-neutral-900 border border-transparent hover:border-neutral-800 transition cursor-pointer text-right"
+            className="flex items-center gap-2 pl-2 pr-2 py-1 rounded-xl hover:bg-[#F8F9FF] border border-transparent hover:border-slate-200 transition cursor-pointer"
           >
             <div className="hidden md:block text-right">
-              <div className="text-xs font-semibold text-neutral-200 leading-tight truncate max-w-[140px]">
+              <div className="text-xs font-bold text-[#0B1C30] leading-tight truncate max-w-[140px]">
                 {displayName}
               </div>
-              <div className="flex items-center justify-end gap-1 mt-0.5">
-                <span
-                  className={`text-[9px] font-mono-num px-1 py-0.2 rounded border font-semibold ${roleInfo.bg}`}
-                >
-                  {roleInfo.label}
-                </span>
+              <div className="text-[11px] font-medium text-[#006398]">
+                {roleInfo.label}
               </div>
             </div>
 
-            <div className="w-8 h-8 rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold text-xs text-neutral-200 shadow-sm">
+            <div className="w-8 h-8 rounded-xl bg-[#FFDBCA] border border-[#EA580C]/30 flex items-center justify-center font-bold text-xs text-[#9D4300]">
               {initialChar}
             </div>
 
-            <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
 
-          {/* Dropdown Menu */}
           {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-56 rounded-xl bg-neutral-900 border border-neutral-800 shadow-2xl py-2 z-50 text-xs animate-fade-in font-sans">
-              <div className="px-4 py-2 border-b border-neutral-800 text-left">
-                <p className="font-semibold text-white truncate">{displayName}</p>
-                <p className="text-[11px] text-neutral-400 font-mono-num truncate">{user?.email || user?.phoneNumber}</p>
-                <div className="mt-1.5">
-                  <span
-                    className={`inline-block text-[9px] font-mono-num px-1.5 py-0.5 rounded border font-bold ${roleInfo.bg}`}
-                  >
-                    VAI TRÒ: {roleInfo.label}
-                  </span>
-                </div>
+            <div className="absolute right-0 mt-1.5 w-60 rounded-2xl bg-white border border-slate-200 shadow-lg py-1.5 z-50 text-xs font-sans">
+              <div className="px-4 py-3 border-b border-slate-100">
+                <p className="font-bold text-[#0B1C30] truncate">{displayName}</p>
+                <p className="text-xs text-slate-500 truncate mt-0.5">{user?.email || user?.phoneNumber}</p>
+                <span className={`inline-block mt-2 text-[11px] px-2.5 py-0.5 rounded-full border font-semibold ${roleInfo.bg}`}>
+                  {roleInfo.label}
+                </span>
               </div>
 
               <div className="py-1">
                 <button
                   onClick={() => {
                     setIsDropdownOpen(false);
+                    setIsProfileOpen(true);
+                  }}
+                  className="w-full px-4 py-2 text-left text-[#0B1C30] hover:bg-[#F8F9FF] flex items-center gap-2.5 transition cursor-pointer font-medium"
+                >
+                  <UserIcon className="w-3.5 h-3.5 text-[#006398]" />
+                  <span>Hồ sơ cá nhân</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsDropdownOpen(false);
                     setIsChangePassOpen(true);
                   }}
-                  className="w-full px-4 py-2 text-left text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center gap-2.5 transition cursor-pointer"
+                  className="w-full px-4 py-2 text-left text-[#0B1C30] hover:bg-[#F8F9FF] flex items-center gap-2.5 transition cursor-pointer font-medium"
                 >
-                  <KeyRound className="w-3.5 h-3.5 text-neutral-400" />
+                  <KeyRound className="w-3.5 h-3.5 text-[#EA580C]" />
                   <span>Đổi mật khẩu</span>
                 </button>
 
@@ -222,42 +215,47 @@ export const Header = ({
                       setIsDropdownOpen(false);
                       navigate('/admin');
                     }}
-                    className="w-full px-4 py-2 text-left text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center gap-2.5 transition cursor-pointer"
+                    className="w-full px-4 py-2 text-left text-[#0B1C30] hover:bg-[#F8F9FF] flex items-center gap-2.5 transition cursor-pointer font-medium"
                   >
-                    <Shield className="w-3.5 h-3.5 text-red-400" />
-                    <span>Trang Quản trị Admin</span>
+                    <Shield className="w-3.5 h-3.5 text-[#006E2D]" />
+                    <span>Quản trị hệ thống (Admin)</span>
                   </button>
                 )}
               </div>
 
-              <div className="border-t border-neutral-800 pt-1">
+              <div className="border-t border-slate-100 pt-1">
                 <button
                   onClick={handleLogout}
-                  className="w-full px-4 py-2 text-left text-red-400 hover:text-red-300 hover:bg-neutral-800 flex items-center gap-2.5 transition cursor-pointer font-medium"
+                  className="w-full px-4 py-2 text-left text-[#BA1A1A] hover:bg-[#FFF8F8] flex items-center gap-2.5 transition cursor-pointer font-semibold"
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span>Đăng xuất hệ thống</span>
+                  <span>Đăng xuất</span>
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* E-STOP BUTTON */}
+        {/* Emergency Stop Button synced with Mobile #BA1A1A */}
         <button
           onClick={onEmergencyStop}
-          className="h-8 px-2.5 sm:px-3 rounded-lg bg-red-600 hover:bg-red-700 active:scale-95 text-white font-display font-bold text-xs tracking-wider flex items-center gap-1.5 shadow-sm transition cursor-pointer shrink-0"
-          title="Ngắt khẩn cấp rơ-le toàn bộ máy rải cám và mâm quay"
+          className="h-9 px-3.5 rounded-xl bg-[#BA1A1A] hover:bg-[#93000A] active:scale-[0.99] text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer shrink-0"
+          title="Ngắt khẩn cấp toàn bộ máy cho ăn"
         >
           <AlertOctagon className="w-4 h-4" />
-          <span className="uppercase text-[11px] sm:text-xs">E-STOP KHẨN CẤP</span>
+          <span>Dừng khẩn cấp (E-STOP)</span>
         </button>
       </div>
 
-      {/* Modal Đổi mật khẩu */}
       <ChangePasswordModal
         isOpen={isChangePassOpen}
         onClose={() => setIsChangePassOpen(false)}
+        onSuccess={() => {}}
+      />
+
+      <ProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
         onSuccess={() => {}}
       />
     </header>

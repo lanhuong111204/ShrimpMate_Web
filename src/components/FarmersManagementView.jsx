@@ -14,7 +14,8 @@ import {
   Trash2, 
   Warehouse, 
   Waves,
-  Eye
+  Eye,
+  Edit3
 } from 'lucide-react';
 import { farmerService } from '../services/farmerService';
 import { farmService } from '../services/farmService';
@@ -33,6 +34,13 @@ export const FarmersManagementView = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 1.1 Modal Chỉnh sửa Farmer
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingFarmer, setEditingFarmer] = useState(null);
+  const [editFullName, setEditFullName] = useState('');
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
+  const [isUpdatingFarmer, setIsUpdatingFarmer] = useState(false);
 
   // 2. Modal Hiển thị Mật khẩu ban đầu (Chỉ hiện 1 lần duy nhất!)
   const [initialPasswordModal, setInitialPasswordModal] = useState({
@@ -215,6 +223,58 @@ export const FarmersManagementView = () => {
     }
   };
 
+  // Thu hồi tất cả phân công của Farmer
+  const handleRevokeAllAssignments = async () => {
+    if (!assignmentModal.farmer?.id) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn thu hồi TOÀN BỘ phân công của [${assignmentModal.farmer.fullName}]?`)) return;
+
+    try {
+      await farmerService.revokeAllAssignments(assignmentModal.farmer.id);
+      setCurrentAssignments([]);
+      await fetchFarmers();
+      setSuccessToast(`Đã thu hồi toàn bộ phân công của [${assignmentModal.farmer.fullName}].`);
+      setTimeout(() => setSuccessToast(''), 3000);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Lỗi thu hồi toàn bộ phân công!'));
+    }
+  };
+
+  // Mở modal sửa thông tin Farmer
+  const handleOpenEdit = (farmer) => {
+    setEditingFarmer(farmer);
+    setEditFullName(farmer.fullName || '');
+    setEditPhoneNumber(farmer.phoneNumber || '');
+    setIsEditModalOpen(true);
+  };
+
+  // Cập nhật Farmer
+  const handleUpdateFarmer = async (e) => {
+    e.preventDefault();
+    if (!editingFarmer) return;
+
+    if (!editFullName.trim() || !editPhoneNumber.trim()) {
+      alert('Vui lòng điền đầy đủ họ tên và số điện thoại!');
+      return;
+    }
+
+    setIsUpdatingFarmer(true);
+    try {
+      await farmerService.updateFarmer(editingFarmer.id, {
+        fullName: editFullName.trim(),
+        phoneNumber: editPhoneNumber.trim(),
+      });
+      setSuccessToast(`Đã cập nhật thông tin [${editFullName.trim()}] thành công.`);
+      setIsEditModalOpen(false);
+      setEditingFarmer(null);
+      await fetchFarmers();
+      setTimeout(() => setSuccessToast(''), 3000);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Lỗi cập nhật thông tin Người nuôi!'));
+    } finally {
+      setIsUpdatingFarmer(false);
+    }
+  };
+
   // Copy password to clipboard
   const handleCopyPassword = () => {
     navigator.clipboard.writeText(initialPasswordModal.password);
@@ -224,58 +284,55 @@ export const FarmersManagementView = () => {
   return (
     <div className="space-y-6">
       {/* 1. Header View */}
-      <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-emerald-600 rounded-full inline-block"></span>
-            <h1 className="font-display font-bold text-base md:text-lg text-neutral-900 tracking-tight uppercase">
-              QUẢN LÝ NGƯỜI NUÔI & PHÂN CÔNG AO (UC020, UC021)
-            </h1>
-          </div>
-          <p className="text-xs text-neutral-500 mt-1">
-            Chủ sở hữu (Manager) cấp tài khoản Farmer, giao quyền phụ trách ao và kiểm soát truy cập di động.
+          <h1 className="text-xl font-bold text-[#0B1C30] tracking-tight font-display">
+            Quản lý nhân sự & Phân công ao nuôi
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            Quản lý tài khoản nhân viên kỹ thuật (Farmer) và phân quyền phụ trách từng ao nuôi.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition cursor-pointer"
+            className="h-9 px-3.5 bg-[#EA580C] hover:bg-[#C2410C] text-white font-bold text-xs rounded-xl flex items-center gap-2 transition shadow-xs cursor-pointer"
           >
-            <UserPlus className="w-4 h-4 text-emerald-400" />
-            <span>Thêm Người Nuôi Mới</span>
+            <UserPlus className="w-4 h-4" />
+            <span>Thêm nhân sự mới</span>
           </button>
         </div>
       </div>
 
       {/* Thông báo lỗi / thành công */}
       {errorMessage && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+        <div className="p-3 bg-[#FFF8F8] border border-[#FFDAD6] text-[#BA1A1A] rounded-xl text-xs flex items-center gap-2 font-medium">
+          <AlertCircle className="w-4 h-4 shrink-0 text-[#BA1A1A]" />
           <span>{errorMessage}</span>
         </div>
       )}
 
       {successToast && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+        <div className="p-3 bg-[#E8F5E9] border border-[#7CF994] text-[#006E2D] rounded-xl text-xs flex items-center gap-2 font-semibold">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-[#006E2D]" />
           <span>{successToast}</span>
         </div>
       )}
 
       {/* 2. Bảng Danh sách Người nuôi */}
-      <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between bg-neutral-50/50">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-[#F8F9FF]">
           <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-neutral-600" />
-            <h3 className="font-display font-bold text-xs uppercase text-neutral-800 tracking-wider">
-              Danh Sách Farmer Trực Thuộc ({farmers.length})
+            <Users className="w-4 h-4 text-[#006398]" />
+            <h3 className="font-display font-bold text-xs uppercase text-[#0B1C30] tracking-wider">
+              Danh Sách Kỹ Thuật Viên / Farmer ({farmers.length})
             </h3>
           </div>
 
           <button
             onClick={fetchFarmers}
-            className="text-xs text-neutral-500 hover:text-neutral-900 flex items-center gap-1 font-mono-num"
+            className="text-xs text-[#006398] hover:text-[#EA580C] font-bold flex items-center gap-1 font-mono-num cursor-pointer"
           >
             <RotateCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             <span>Làm mới</span>
@@ -283,16 +340,16 @@ export const FarmersManagementView = () => {
         </div>
 
         {isLoading ? (
-          <div className="py-16 text-center text-xs text-neutral-500 font-mono-num flex items-center justify-center gap-2">
-            <RotateCw className="w-4 h-4 animate-spin text-emerald-600" />
+          <div className="py-16 text-center text-xs text-slate-500 font-mono-num flex items-center justify-center gap-2">
+            <RotateCw className="w-4 h-4 animate-spin text-[#EA580C]" />
             <span>Đang nạp danh sách nhân sự...</span>
           </div>
         ) : farmers.length === 0 ? (
-          <div className="py-16 text-center text-xs text-neutral-500 space-y-3">
+          <div className="py-16 text-center text-xs text-slate-500 space-y-3">
             <p>Chưa có tài khoản Người nuôi nào trực thuộc cơ sở này.</p>
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold rounded-xl text-xs"
+              className="px-4 py-2 bg-[#FFF8F5] hover:bg-[#FFDBCA] text-[#9D4300] border border-[#FFDBCA] font-bold rounded-xl text-xs cursor-pointer"
             >
               + Tạo tài khoản Farmer đầu tiên
             </button>
@@ -301,50 +358,50 @@ export const FarmersManagementView = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-neutral-200 bg-neutral-50/60 font-mono-num text-[11px] uppercase text-neutral-500 font-semibold">
-                  <th className="py-3 px-6">Họ và Tên</th>
-                  <th className="py-3 px-4">Số Điện Thoại</th>
-                  <th className="py-3 px-4">Email</th>
-                  <th className="py-3 px-4 text-center">Ao Phân Công</th>
-                  <th className="py-3 px-4 text-center">Trạng Thái</th>
-                  <th className="py-3 px-6 text-right">Thao Tác</th>
+                <tr className="border-b border-slate-200 bg-[#F8F9FF] font-mono-num text-[11px] uppercase text-slate-500 font-bold">
+                  <th className="py-3.5 px-6">Họ và Tên</th>
+                  <th className="py-3.5 px-4">Số Điện Thoại</th>
+                  <th className="py-3.5 px-4">Email</th>
+                  <th className="py-3.5 px-4 text-center">Ao Phân Công</th>
+                  <th className="py-3.5 px-4 text-center">Trạng Thái</th>
+                  <th className="py-3.5 px-6 text-right">Thao Tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
+              <tbody className="divide-y divide-slate-100">
                 {farmers.map((farmer) => (
-                  <tr key={farmer.id} className="hover:bg-neutral-50/70 transition">
-                    <td className="py-3.5 px-6 font-semibold text-neutral-900">
+                  <tr key={farmer.id} className="hover:bg-[#F8F9FF] transition">
+                    <td className="py-3.5 px-6 font-bold text-[#0B1C30]">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-neutral-100 border border-neutral-200 flex items-center justify-center font-bold text-xs text-neutral-700">
+                        <div className="w-8 h-8 rounded-xl bg-[#FFDBCA] border border-[#EA580C]/20 flex items-center justify-center font-bold text-xs text-[#9D4300]">
                           {farmer.fullName?.charAt(0)?.toUpperCase() || 'F'}
                         </div>
                         <span>{farmer.fullName}</span>
                       </div>
                     </td>
 
-                    <td className="py-3.5 px-4 font-mono-num text-neutral-600">
+                    <td className="py-3.5 px-4 font-mono-num text-slate-600">
                       {farmer.phoneNumber}
                     </td>
 
-                    <td className="py-3.5 px-4 text-neutral-500 font-mono-num truncate max-w-[180px]">
+                    <td className="py-3.5 px-4 text-slate-500 font-mono-num truncate max-w-[180px]">
                       {farmer.email || '--'}
                     </td>
 
                     <td className="py-3.5 px-4 text-center">
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-mono-num font-bold bg-neutral-100 text-neutral-800 border border-neutral-200">
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-mono-num font-bold bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE]">
                         {farmer.assignmentCount ?? 0} ao
                       </span>
                     </td>
 
                     <td className="py-3.5 px-4 text-center font-mono-num">
                       {farmer.isActive ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#006E2D]" />
                           Hoạt động
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-50 text-red-600 border border-red-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FFDAD6] text-[#BA1A1A]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#BA1A1A]" />
                           Đã khóa
                         </span>
                       )}
@@ -352,22 +409,28 @@ export const FarmersManagementView = () => {
 
                     <td className="py-3.5 px-6 text-right">
                       <div className="flex items-center justify-end gap-2 font-mono-num">
-                        {/* Nút Phân công ao */}
                         <button
                           onClick={() => handleOpenAssignment(farmer)}
-                          className="px-2.5 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer border border-neutral-200"
+                          className="px-3 py-1 rounded-xl bg-[#EFF4FF] hover:bg-[#DCE9FF] text-[#006398] text-[11px] font-bold flex items-center gap-1 transition cursor-pointer border border-[#D3E4FE]"
                         >
-                          <Layers className="w-3.5 h-3.5 text-emerald-600" />
+                          <Layers className="w-3.5 h-3.5 text-[#006398]" />
                           <span>Phân công</span>
                         </button>
 
-                        {/* Nút Khóa / Mở khóa */}
+                        <button
+                          onClick={() => handleOpenEdit(farmer)}
+                          className="p-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                          title="Sửa thông tin Farmer (Họ tên, SĐT)"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+
                         <button
                           onClick={() => handleToggleStatus(farmer)}
-                          className={`p-1.5 rounded-lg border text-xs transition cursor-pointer ${
+                          className={`p-1.5 rounded-xl border text-xs transition cursor-pointer ${
                             farmer.isActive
-                              ? 'border-neutral-200 text-neutral-600 hover:bg-neutral-100'
-                              : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                              ? 'border-slate-200 text-slate-600 hover:bg-slate-100'
+                              : 'border-[#7CF994] text-[#006E2D] hover:bg-[#E8F5E9]'
                           }`}
                           title={farmer.isActive ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
                         >
@@ -633,9 +696,21 @@ export const FarmersManagementView = () => {
 
               {/* Danh sách phân công hiện tại */}
               <div className="pt-3 border-t border-neutral-200 space-y-2">
-                <span className="font-bold text-xs uppercase text-neutral-700 font-mono-num">
-                  Phân Công Đang Có ({currentAssignments.length})
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs uppercase text-neutral-700 font-mono-num">
+                    Phân Công Đang Có ({currentAssignments.length})
+                  </span>
+                  {currentAssignments.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleRevokeAllAssignments}
+                      className="text-[11px] text-red-600 hover:text-red-700 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Thu hồi tất cả</span>
+                    </button>
+                  )}
+                </div>
                 {currentAssignments.length === 0 ? (
                   <div className="text-xs text-neutral-400 italic">Chưa có phân công nào.</div>
                 ) : (
@@ -653,7 +728,7 @@ export const FarmersManagementView = () => {
                         </div>
                         <button
                           onClick={() => handleRevokeAssignment(a.id)}
-                          className="p-1 rounded text-red-500 hover:bg-red-50 transition"
+                          className="p-1 rounded text-red-500 hover:bg-red-50 transition cursor-pointer"
                           title="Thu hồi phân công này"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -677,12 +752,80 @@ export const FarmersManagementView = () => {
                 type="button"
                 onClick={handleSaveAssignment}
                 disabled={isSubmitting}
-                className="px-5 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 rounded-xl shadow-sm flex items-center gap-1.5"
+                className="px-5 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
               >
                 {isSubmitting && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
                 <span>Lưu Phân Công</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. MODAL CHỈNH SỬA THÔNG TIN FARMER */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden font-sans">
+            <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-display font-bold text-sm uppercase tracking-wider">
+                  Cập Nhật Người Nuôi
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-neutral-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateFarmer} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1 font-mono-num uppercase">
+                  Họ và Tên *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1 font-mono-num uppercase">
+                  Số Điện Thoại (Nhận OTP SMS) *
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={editPhoneNumber}
+                  onChange={(e) => setEditPhoneNumber(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 font-mono-num"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-neutral-100 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 rounded-xl cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingFarmer}
+                  className="px-5 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isUpdatingFarmer && <RotateCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />}
+                  <span>Lưu Thay Đổi</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -12,6 +12,8 @@ import {
   SlidersHorizontal, 
   Radio
 } from 'lucide-react';
+import { alertService } from '../services/alertService';
+import { telemetryService } from '../services/telemetryService';
 
 export const DashboardView = ({
   ponds,
@@ -26,6 +28,51 @@ export const DashboardView = ({
   const [testingAll, setTestingAll] = useState(false);
   const [testCountdown, setTestCountdown] = useState(10);
   const [selectedHoverPoint, setSelectedHoverPoint] = useState(null);
+
+  // Live Alerts State
+  const [liveAlerts, setLiveAlerts] = useState([]);
+  const [alertSummary, setAlertSummary] = useState(null);
+
+  const fetchAlerts = async () => {
+    try {
+      const summary = await alertService.getSummary().catch(() => null);
+      if (summary) setAlertSummary(summary);
+
+      const alertsRes = await alertService.getAlerts({ status: 'open', limit: 8 }).catch(() => null);
+      const list = Array.isArray(alertsRes) ? alertsRes : (alertsRes?.data || []);
+      if (list && list.length > 0) {
+        setLiveAlerts(list);
+      }
+    } catch (err) {
+      console.warn('Lỗi nạp cảnh báo:', err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchAlerts();
+    const timer = setInterval(fetchAlerts, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleAcknowledgeAlert = async (id) => {
+    try {
+      await alertService.acknowledgeAlert(id);
+      onShowToast?.('Đã tiếp nhận xử lý sự cố.', 'info');
+      await fetchAlerts();
+    } catch (err) {
+      console.warn('Lỗi ack alert:', err);
+    }
+  };
+
+  const handleResolveAlert = async (id) => {
+    try {
+      await alertService.resolveAlert(id);
+      onShowToast?.('Đã đánh dấu giải quyết sự cố hoàn tất.', 'success');
+      await fetchAlerts();
+    } catch (err) {
+      console.warn('Lỗi resolve alert:', err);
+    }
+  };
 
   // Calculate high-level KPIs
   const totalSprayedToday = ponds.reduce((sum, p) => sum + p.sprayedKg, 0) + 225; // 285 total baseline
@@ -576,42 +623,99 @@ export const DashboardView = ({
               </span>
             </div>
 
-            {/* Event List */}
+            {/* Live Alerts & Event List */}
             <div className="space-y-2 text-xs font-mono-num max-h-[300px] overflow-y-auto pr-1">
-              {logs.map((log) => {
-                const isAlert = log.type === 'alert';
-                return (
-                  <div
-                    key={log.id}
-                    className={`p-2.5 rounded-lg border flex items-start gap-2.5 transition ${
-                      isAlert
-                        ? 'bg-red-50/60 border-red-200/70'
-                        : 'bg-neutral-50 border-neutral-200/70 hover:bg-neutral-100/60'
-                    }`}
-                  >
-                    {isAlert ? (
-                      <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span
-                          className={`font-semibold text-[11px] truncate ${
-                            isAlert ? 'text-red-600' : 'text-neutral-800'
-                          }`}
-                        >
-                          {log.title}
+              {liveAlerts.length > 0 ? (
+                liveAlerts.map((alt) => {
+                  const isCrit = alt.severity === 3 || alt.severity === 'critical';
+                  const isWarn = alt.severity === 2 || alt.severity === 'warning';
+                  return (
+                    <div
+                      key={alt.id}
+                      className={`p-2.5 rounded-xl border flex flex-col gap-1.5 transition ${
+                        isCrit
+                          ? 'bg-red-50/80 border-red-200'
+                          : isWarn
+                          ? 'bg-amber-50/80 border-amber-200'
+                          : 'bg-neutral-50 border-neutral-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                          <AlertTriangle className={`w-3.5 h-3.5 ${isCrit ? 'text-red-600' : 'text-amber-600'}`} />
+                          <span className={isCrit ? 'text-red-700' : 'text-amber-800'}>
+                            {alt.type || 'SỰ CỐ AO NUÔI'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-neutral-400">
+                          {alt.triggeredAt ? new Date(alt.triggeredAt).toLocaleTimeString('vi-VN') : 'Vừa xong'}
                         </span>
-                        <span className="text-[10px] text-neutral-400 shrink-0">{log.timestamp}</span>
                       </div>
-                      <div className="text-[11px] text-neutral-600 mt-0.5 leading-snug font-sans">
-                        {log.message}
+
+                      <div className="text-[11px] text-neutral-700 font-sans leading-snug">
+                        {alt.message}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-neutral-200/60 text-[10px]">
+                        <span className="text-neutral-500 font-mono-num">
+                          {alt.pondName || alt.deviceUid || 'Ao nuôi'}
+                        </span>
+                        <div className="flex gap-1.5">
+                          {alt.status === 'open' && (
+                            <button
+                              onClick={() => handleAcknowledgeAlert(alt.id)}
+                              className="px-2 py-0.5 rounded bg-white border border-neutral-300 hover:bg-neutral-100 text-neutral-800 font-semibold cursor-pointer"
+                            >
+                              Tiếp nhận
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleResolveAlert(alt.id)}
+                            className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer"
+                          >
+                            Đã xử lý
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                logs.map((log) => {
+                  const isAlert = log.type === 'alert';
+                  return (
+                    <div
+                      key={log.id}
+                      className={`p-2.5 rounded-lg border flex items-start gap-2.5 transition ${
+                        isAlert
+                          ? 'bg-red-50/60 border-red-200/70'
+                          : 'bg-neutral-50 border-neutral-200/70 hover:bg-neutral-100/60'
+                      }`}
+                    >
+                      {isAlert ? (
+                        <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`font-semibold text-[11px] truncate ${
+                              isAlert ? 'text-red-600' : 'text-neutral-800'
+                            }`}
+                          >
+                            {log.title}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 shrink-0">{log.timestamp}</span>
+                        </div>
+                        <div className="text-[11px] text-neutral-600 mt-0.5 leading-snug font-sans">
+                          {log.message}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 

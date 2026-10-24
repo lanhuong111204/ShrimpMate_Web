@@ -103,17 +103,17 @@ export const Sidebar = ({
           <span>Lên Lịch Ăn Cữ</span>
         </button>
 
-        {/* 6. AI Bio-Acoustic */}
+        {/* 6. AI Camera & Bắt Mồi FIS (UC014, UC019) */}
         <button
-          onClick={() => onSelectTab('acoustics')}
+          onClick={() => onSelectTab('camera-fis')}
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-            currentTab === 'acoustics'
+            currentTab === 'camera-fis' || currentTab === 'acoustics'
               ? 'bg-neutral-900 text-white shadow-sm font-semibold'
               : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
           }`}
         >
-          <Activity className="w-4 h-4 shrink-0" />
-          <span>AI Bio-Acoustic</span>
+          <Activity className="w-4 h-4 shrink-0 text-emerald-400" />
+          <span>AI Camera & Bắt Mồi FIS</span>
         </button>
 
         <div className="pt-4 px-2.5 py-1 text-[10px] font-mono-num font-semibold uppercase text-neutral-400 tracking-wider">

@@ -7,6 +7,8 @@ import {
   HardDrive, 
   Play
 } from 'lucide-react';
+import { feedingService } from '../services/feedingService';
+import { safetyRuleService } from '../services/safetyRuleService';
 
 export const ScheduleView = ({
   schedule,

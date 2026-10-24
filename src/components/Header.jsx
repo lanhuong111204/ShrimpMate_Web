@@ -7,10 +7,13 @@ import {
   LogOut, 
   KeyRound, 
   User as UserIcon, 
-  Shield 
+  Shield,
+  Bell,
+  AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ChangePasswordModal } from './auth/ChangePasswordModal';
+import { alertService } from '../services/alertService';
 
 export const Header = ({
   currentTime,
@@ -25,6 +28,23 @@ export const Header = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isChangePassOpen, setIsChangePassOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Tổng kết số lượng sự cố cảnh báo
+  const [alertSummary, setAlertSummary] = useState(null);
+
+  useEffect(() => {
+    const fetchAlertSummary = async () => {
+      try {
+        const res = await alertService.getSummary().catch(() => null);
+        if (res) setAlertSummary(res);
+      } catch (err) {
+        console.warn('Lỗi lấy summary cảnh báo:', err);
+      }
+    };
+    fetchAlertSummary();
+    const interval = setInterval(fetchAlertSummary, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Đóng dropdown khi click ra ngoài
   useEffect(() => {
@@ -127,6 +147,20 @@ export const Header = ({
         >
           <RotateCw className={`w-3.5 h-3.5 text-neutral-400 ${isSyncing ? 'animate-spin text-emerald-400' : ''}`} />
           <span className="font-mono-num text-[11px]">{currentTime} Đồng bộ</span>
+        </button>
+
+        {/* Alerts Badge Indicator */}
+        <button
+          onClick={() => navigate('/logs')}
+          title="Xem trung tâm cảnh báo sự cố SCADA"
+          className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 transition cursor-pointer"
+        >
+          <Bell className="w-3.5 h-3.5 text-neutral-300" />
+          {alertSummary?.open > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-600 text-white font-mono-num font-bold text-[9px] flex items-center justify-center animate-pulse shadow-sm">
+              {alertSummary.open}
+            </span>
+          )}
         </button>
 
         {/* User Profile & Account Dropdown */}

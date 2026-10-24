@@ -18,11 +18,13 @@ import { ScheduleView } from './components/ScheduleView';
 import { FeederControlView } from './components/FeederControlView';
 import { PondsManagementView } from './components/PondsManagementView';
 import { FarmersManagementView } from './components/FarmersManagementView';
+import { CameraFisView } from './components/CameraFisView';
 import { BioAcousticsView } from './components/BioAcousticsView';
 import { ScadaLogsView } from './components/ScadaLogsView';
 import { IoTStationView } from './components/IoTStationView';
 import { EStopModal } from './components/EStopModal';
 import { Toast } from './components/Toast';
+import { deviceService } from './services/deviceService';
 
 const SCADAAppContent = () => {
   const navigate = useNavigate();
@@ -39,8 +41,9 @@ const SCADAAppContent = () => {
         return 'feeder';
       case '/schedule':
         return 'schedule';
+      case '/camera-fis':
       case '/acoustics':
-        return 'acoustics';
+        return 'camera-fis';
       case '/iot':
         return 'iot';
       case '/logs':
@@ -109,8 +112,16 @@ const SCADAAppContent = () => {
   };
 
   // E-STOP Trigger
-  const handleEmergencyStop = () => {
+  const handleEmergencyStop = async () => {
     setIsEStopActive(true);
+    // Gửi lệnh ngắt khẩn cấp phần cứng qua Backend API & MQTT
+    try {
+      if (activePond?.deviceId || activePond?.id) {
+        await deviceService.emergencyStop(activePond.deviceId || activePond.id).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('Lỗi gửi API E-Stop:', err);
+    }
     // Pause or alert all ponds
     setPonds((prev) =>
       prev.map((p) => ({
@@ -309,7 +320,8 @@ const SCADAAppContent = () => {
                 />
               }
             />
-            <Route path="/acoustics" element={<BioAcousticsView />} />
+            <Route path="/camera-fis" element={<CameraFisView />} />
+            <Route path="/acoustics" element={<CameraFisView />} />
             <Route
               path="/logs"
               element={
@@ -342,7 +354,11 @@ const SCADAAppContent = () => {
       </div>
 
       {/* E-Stop Modal */}
-      <EStopModal isOpen={isEStopActive} onReset={handleResetEStop} />
+      <EStopModal 
+        isOpen={isEStopActive} 
+        onReset={handleResetEStop} 
+        activeDeviceId={activePond?.deviceId || activePond?.id}
+      />
 
       {/* Floating System Toast */}
       <Toast

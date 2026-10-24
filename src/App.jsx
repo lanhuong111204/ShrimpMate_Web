@@ -295,7 +295,11 @@ const SCADAAppContent = () => {
             />
             <Route
               path="/farmers"
-              element={<FarmersManagementView />}
+              element={
+                <RoleRoute allowedRoles={['manager', 'admin']}>
+                  <FarmersManagementView />
+                </RoleRoute>
+              }
             />
             <Route
               path="/feeder"

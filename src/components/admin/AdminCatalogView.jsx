@@ -3,6 +3,7 @@ import {
   Cpu, 
   Plus, 
   Trash2, 
+  Edit3,
   RotateCw, 
   CheckCircle2, 
   AlertCircle, 
@@ -30,6 +31,14 @@ export const AdminCatalogView = () => {
   const [type, setType] = useState('feeder');
   const [firmwareVersion, setFirmwareVersion] = useState('1.0.0');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Modal Cập nhật thiết bị
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingDevice, setEditingDevice] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editFirmwareVersion, setEditFirmwareVersion] = useState('');
+  const [editStatus, setEditStatus] = useState('offline');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const fetchDevices = async () => {
     setIsLoading(true);
@@ -81,6 +90,40 @@ export const AdminCatalogView = () => {
       setErrorMessage(getErrorMessage(err, 'Lỗi tạo thiết bị vào Catalog!'));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenEdit = (dev) => {
+    setEditingDevice(dev);
+    setEditName(dev.name || '');
+    setEditFirmwareVersion(dev.firmwareVersion || '1.0.0');
+    setEditStatus(dev.status || 'offline');
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateDevice = async (e) => {
+    e.preventDefault();
+    if (!editingDevice) return;
+
+    setIsUpdating(true);
+    setErrorMessage('');
+
+    try {
+      await deviceService.updateDevice(editingDevice.id, {
+        name: editName.trim(),
+        firmwareVersion: editFirmwareVersion.trim(),
+        status: editStatus,
+      });
+
+      setSuccessToast(`Đã cập nhật thông tin thiết bị [${editingDevice.deviceUid}] thành công.`);
+      setIsEditModalOpen(false);
+      setEditingDevice(null);
+      await fetchDevices();
+      setTimeout(() => setSuccessToast(''), 3000);
+    } catch (err) {
+      setErrorMessage(getErrorMessage(err, 'Lỗi cập nhật thiết bị!'));
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -188,7 +231,7 @@ export const AdminCatalogView = () => {
                 <th className="py-3 px-4 text-center">Firmware</th>
                 <th className="py-3 px-4 text-center">Vị Trí Gán</th>
                 <th className="py-3 px-4 text-center">Trạng Thái</th>
-                <th className="py-3 px-6 text-right">Xóa</th>
+                <th className="py-3 px-6 text-right">Thao Tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 font-mono-num">
@@ -242,13 +285,22 @@ export const AdminCatalogView = () => {
                   </td>
 
                   <td className="py-3.5 px-6 text-right">
-                    <button
-                      onClick={() => handleDeleteDevice(dev)}
-                      className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition cursor-pointer"
-                      title="Xóa khỏi Catalog"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => handleOpenEdit(dev)}
+                        className="p-1.5 rounded-lg border border-neutral-200 text-neutral-700 hover:bg-neutral-100 transition cursor-pointer"
+                        title="Chỉnh sửa thiết bị"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDevice(dev)}
+                        className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition cursor-pointer"
+                        title="Xóa khỏi Catalog"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -260,7 +312,7 @@ export const AdminCatalogView = () => {
       {/* 4. MODAL KHAI BÁO THIẾT BỊ MỚI */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden font-sans">
             <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
               <div className="flex items-center gap-2">
                 <Plus className="w-5 h-5 text-emerald-400" />
@@ -348,10 +400,90 @@ export const AdminCatalogView = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 rounded-xl shadow-sm flex items-center gap-1.5"
+                  className="px-5 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
                 >
                   {isSubmitting && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>Thêm Vào Catalog</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 5. MODAL CHỈNH SỬA THIẾT BỊ */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden font-sans">
+            <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-display font-bold text-sm uppercase tracking-wider">
+                  Cập Nhật Thiết Bị: {editingDevice?.deviceUid}
+                </h3>
+              </div>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-neutral-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateDevice} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1 font-mono-num uppercase">
+                  Tên Thiết Bị <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1 font-mono-num uppercase">
+                    Firmware
+                  </label>
+                  <input
+                    type="text"
+                    value={editFirmwareVersion}
+                    onChange={(e) => setEditFirmwareVersion(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 font-mono-num"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1 font-mono-num uppercase">
+                    Trạng Thái
+                  </label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 bg-white"
+                  >
+                    <option value="offline">Offline</option>
+                    <option value="online">Online</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 rounded-xl"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="px-5 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isUpdating && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Lưu Thay Đổi</span>
                 </button>
               </div>
             </form>

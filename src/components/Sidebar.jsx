@@ -1,14 +1,18 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Waves, 
-  Users,
+  Users, 
   Settings2, 
   Clock, 
   Activity, 
   Radio, 
-  History
+  History,
+  Shield,
+  ArrowRight
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export const Sidebar = ({
   currentTab,
@@ -16,9 +20,29 @@ export const Sidebar = ({
   activePondCount = 4,
   feederReadyCount = 4,
 }) => {
+  const navigate = useNavigate();
+  const { role } = useAuth();
+
   return (
     <aside className="w-56 bg-white border-r border-neutral-200 flex flex-col justify-between shrink-0 select-none">
       <div className="p-3 space-y-1">
+        {/* Lối tắt quay lại Bảng Admin (nếu role === 'admin') */}
+        {role === 'admin' && (
+          <div className="mb-2 pb-2 border-b border-neutral-200">
+            <button
+              onClick={() => navigate('/admin')}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-800 transition cursor-pointer shadow-xs"
+              title="Quay lại bàn điều hành Quản trị viên"
+            >
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-red-400" />
+                <span>Bàn Admin Root</span>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-red-400" />
+            </button>
+          </div>
+        )}
+
         <div className="px-2.5 py-1 text-[10px] font-mono-num font-semibold uppercase text-neutral-400 tracking-wider">
           Điều Hành Trung Tâm
         </div>
@@ -58,18 +82,20 @@ export const Sidebar = ({
           </span>
         </button>
 
-        {/* 3. Quản Lý Người Nuôi & Phân Công (UC020, UC021) */}
-        <button
-          onClick={() => onSelectTab('farmers')}
-          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-            currentTab === 'farmers'
-              ? 'bg-neutral-900 text-white shadow-sm font-semibold'
-              : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
-          }`}
-        >
-          <Users className="w-4 h-4 shrink-0" />
-          <span>Quản Lý Người Nuôi</span>
-        </button>
+        {/* 3. Quản Lý Người Nuôi & Phân Công (UC020, UC021) - Ẩn với Farmer */}
+        {role !== 'farmer' && (
+          <button
+            onClick={() => onSelectTab('farmers')}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
+              currentTab === 'farmers'
+                ? 'bg-neutral-900 text-white shadow-sm font-semibold'
+                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
+            }`}
+          >
+            <Users className="w-4 h-4 shrink-0" />
+            <span>Quản Lý Người Nuôi</span>
+          </button>
+        )}
 
         {/* 4. Điều Khiển Máy Ăn */}
         <button
@@ -112,7 +138,7 @@ export const Sidebar = ({
               : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80'
           }`}
         >
-          <Activity className="w-4 h-4 shrink-0 text-emerald-400" />
+          <Activity className="w-4 h-4 shrink-0 text-emerald-500" />
           <span>AI Camera & Bắt Mồi FIS</span>
         </button>
 

@@ -14,7 +14,8 @@ import {
   Trash2, 
   Warehouse, 
   Waves,
-  Eye
+  Eye,
+  Edit3
 } from 'lucide-react';
 import { farmerService } from '../services/farmerService';
 import { farmService } from '../services/farmService';
@@ -33,6 +34,13 @@ export const FarmersManagementView = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 1.1 Modal Chỉnh sửa Farmer
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingFarmer, setEditingFarmer] = useState(null);
+  const [editFullName, setEditFullName] = useState('');
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
+  const [isUpdatingFarmer, setIsUpdatingFarmer] = useState(false);
 
   // 2. Modal Hiển thị Mật khẩu ban đầu (Chỉ hiện 1 lần duy nhất!)
   const [initialPasswordModal, setInitialPasswordModal] = useState({
@@ -215,6 +223,58 @@ export const FarmersManagementView = () => {
     }
   };
 
+  // Thu hồi tất cả phân công của Farmer
+  const handleRevokeAllAssignments = async () => {
+    if (!assignmentModal.farmer?.id) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn thu hồi TOÀN BỘ phân công của [${assignmentModal.farmer.fullName}]?`)) return;
+
+    try {
+      await farmerService.revokeAllAssignments(assignmentModal.farmer.id);
+      setCurrentAssignments([]);
+      await fetchFarmers();
+      setSuccessToast(`Đã thu hồi toàn bộ phân công của [${assignmentModal.farmer.fullName}].`);
+      setTimeout(() => setSuccessToast(''), 3000);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Lỗi thu hồi toàn bộ phân công!'));
+    }
+  };
+
+  // Mở modal sửa thông tin Farmer
+  const handleOpenEdit = (farmer) => {
+    setEditingFarmer(farmer);
+    setEditFullName(farmer.fullName || '');
+    setEditPhoneNumber(farmer.phoneNumber || '');
+    setIsEditModalOpen(true);
+  };
+
+  // Cập nhật Farmer
+  const handleUpdateFarmer = async (e) => {
+    e.preventDefault();
+    if (!editingFarmer) return;
+
+    if (!editFullName.trim() || !editPhoneNumber.trim()) {
+      alert('Vui lòng điền đầy đủ họ tên và số điện thoại!');
+      return;
+    }
+
+    setIsUpdatingFarmer(true);
+    try {
+      await farmerService.updateFarmer(editingFarmer.id, {
+        fullName: editFullName.trim(),
+        phoneNumber: editPhoneNumber.trim(),
+      });
+      setSuccessToast(`Đã cập nhật thông tin [${editFullName.trim()}] thành công.`);
+      setIsEditModalOpen(false);
+      setEditingFarmer(null);
+      await fetchFarmers();
+      setTimeout(() => setSuccessToast(''), 3000);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Lỗi cập nhật thông tin Người nuôi!'));
+    } finally {
+      setIsUpdatingFarmer(false);
+    }
+  };
+
   // Copy password to clipboard
   const handleCopyPassword = () => {
     navigator.clipboard.writeText(initialPasswordModal.password);
@@ -359,6 +419,15 @@ export const FarmersManagementView = () => {
                         >
                           <Layers className="w-3.5 h-3.5 text-emerald-600" />
                           <span>Phân công</span>
+                        </button>
+
+                        {/* Nút Sửa thông tin */}
+                        <button
+                          onClick={() => handleOpenEdit(farmer)}
+                          className="p-1.5 rounded-lg border border-neutral-200 text-neutral-700 hover:bg-neutral-100 transition cursor-pointer"
+                          title="Sửa thông tin Farmer (Họ tên, SĐT)"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
                         </button>
 
                         {/* Nút Khóa / Mở khóa */}
@@ -633,9 +702,21 @@ export const FarmersManagementView = () => {
 
               {/* Danh sách phân công hiện tại */}
               <div className="pt-3 border-t border-neutral-200 space-y-2">
-                <span className="font-bold text-xs uppercase text-neutral-700 font-mono-num">
-                  Phân Công Đang Có ({currentAssignments.length})
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs uppercase text-neutral-700 font-mono-num">
+                    Phân Công Đang Có ({currentAssignments.length})
+                  </span>
+                  {currentAssignments.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleRevokeAllAssignments}
+                      className="text-[11px] text-red-600 hover:text-red-700 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Thu hồi tất cả</span>
+                    </button>
+                  )}
+                </div>
                 {currentAssignments.length === 0 ? (
                   <div className="text-xs text-neutral-400 italic">Chưa có phân công nào.</div>
                 ) : (
@@ -653,7 +734,7 @@ export const FarmersManagementView = () => {
                         </div>
                         <button
                           onClick={() => handleRevokeAssignment(a.id)}
-                          className="p-1 rounded text-red-500 hover:bg-red-50 transition"
+                          className="p-1 rounded text-red-500 hover:bg-red-50 transition cursor-pointer"
                           title="Thu hồi phân công này"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -677,12 +758,80 @@ export const FarmersManagementView = () => {
                 type="button"
                 onClick={handleSaveAssignment}
                 disabled={isSubmitting}
-                className="px-5 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 rounded-xl shadow-sm flex items-center gap-1.5"
+                className="px-5 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
               >
                 {isSubmitting && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
                 <span>Lưu Phân Công</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. MODAL CHỈNH SỬA THÔNG TIN FARMER */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden font-sans">
+            <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-display font-bold text-sm uppercase tracking-wider">
+                  Cập Nhật Người Nuôi
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-neutral-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateFarmer} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1 font-mono-num uppercase">
+                  Họ và Tên *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1 font-mono-num uppercase">
+                  Số Điện Thoại (Nhận OTP SMS) *
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={editPhoneNumber}
+                  onChange={(e) => setEditPhoneNumber(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 font-mono-num"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-neutral-100 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 rounded-xl cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingFarmer}
+                  className="px-5 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isUpdatingFarmer && <RotateCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />}
+                  <span>Lưu Thay Đổi</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

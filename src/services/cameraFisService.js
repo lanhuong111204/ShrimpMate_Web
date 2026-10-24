@@ -2,9 +2,10 @@ import apiClient from './apiClient';
 
 /**
  * Service Thị giác Máy tính & Cường độ Bắt mồi FIS (Camera Computer Vision - UC014, UC019)
- * Xử lý song song 2 luồng: YOLO11n-seg (phân đoạn sàng ăn & đếm tôm) + MobileNetV3 (phân loại hành vi ăn)
+ * và Module 12: Đề xuất AI & Tối ưu cữ ăn (/ponds/:pondId/ai)
  */
 export const cameraFisService = {
+  // ================= 1. CAMERA COMPUTER VISION (MODULE 11) =================
   /**
    * Lấy kết quả FIS mới nhất theo ao nuôi (trạng thái bắt mồi, tỷ lệ thức ăn thừa, mật độ tôm)
    * @param {string} pondId
@@ -64,6 +65,39 @@ export const cameraFisService = {
    */
   analyzeFrame: async (data) => {
     return await apiClient.post('/camera/analyze', data);
+  },
+
+  // ================= 2. ĐỀ XUẤT AI & TỐI ƯU CỮ ĂN (MODULE 12) =================
+  /**
+   * Lấy khuyến nghị AI mới nhất cho ao nuôi (Mục 12.1)
+   * @param {string} pondId
+   */
+  getLatestAiRecommendation: async (pondId) => {
+    try {
+      return await apiClient.get(`/ponds/${pondId}/ai/recommendations/latest`);
+    } catch (err) {
+      // Fallback endpoint nếu backend cấu hình theo Tài liệu 1
+      return await apiClient.get(`/ai-integration/ponds/${pondId}/recommendations`);
+    }
+  },
+
+  /**
+   * Lấy lịch sử các khuyến nghị AI (Mục 12.2)
+   * @param {string} pondId
+   * @param {number} limit
+   */
+  getAiRecommendationHistory: async (pondId, limit = 10) => {
+    return await apiClient.get(`/ponds/${pondId}/ai/recommendations`, {
+      params: { limit },
+    });
+  },
+
+  /**
+   * Dự báo sinh khối và tốc độ tăng trưởng tôm
+   * @param {string} pondId
+   */
+  getBiomassForecast: async (pondId) => {
+    return await apiClient.get(`/ai-integration/ponds/${pondId}/forecast-biomass`);
   },
 };
 

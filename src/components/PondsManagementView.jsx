@@ -11,8 +11,10 @@ import {
   Trash2, 
   RotateCw, 
   AlertCircle,
-  ChevronDown
+  ChevronDown,
+  Shield
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { farmService } from '../services/farmService';
 import { pondService } from '../services/pondService';
 import { FarmModal } from './ponds/FarmModal';
@@ -26,6 +28,8 @@ export const PondsManagementView = ({
   onNavigateTab,
   onRefillFeed,
 }) => {
+  const { role } = useAuth();
+  const canManage = role === 'manager';
   // Quản lý Trang trại
   const [farms, setFarms] = useState([]);
   const [selectedFarm, setSelectedFarm] = useState(null);
@@ -125,6 +129,21 @@ export const PondsManagementView = ({
       })
     : mockPonds || [];
 
+  // Xóa trang trại
+  const handleDeleteFarm = async () => {
+    if (!selectedFarm?.id) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa trang trại [${selectedFarm.name}]? Tất cả các ao nuôi trực thuộc sẽ được xóa mềm.`)) {
+      return;
+    }
+
+    try {
+      await farmService.deleteFarm(selectedFarm.id);
+      await fetchFarms();
+    } catch (err) {
+      alert('Lỗi xóa trang trại: ' + (err?.message || 'Lỗi hệ thống'));
+    }
+  };
+
   // Xóa ao nuôi
   const handleDeletePond = async (pond) => {
     if (!selectedFarm?.id) return;
@@ -142,6 +161,21 @@ export const PondsManagementView = ({
 
   return (
     <div className="space-y-6">
+      {/* Banner Chế độ Thanh tra dành cho Admin */}
+      {role === 'admin' && (
+        <div className="p-3.5 bg-neutral-900 border border-neutral-800 text-neutral-200 rounded-2xl flex items-center justify-between text-xs font-sans">
+          <div className="flex items-center gap-2.5">
+            <Shield className="w-4 h-4 text-emerald-400" />
+            <span>
+              <strong>Chế độ Thanh tra & Giám sát Cơ sở Nuôi Toàn diện:</strong> Quản trị viên theo dõi dữ liệu trang trại, ao nuôi phục vụ hỗ trợ kỹ thuật và kiểm tra chéo chỉ số FCR (Chế độ xem chỉ đọc).
+            </span>
+          </div>
+          <span className="font-mono-num font-bold text-[10px] bg-red-950/80 text-red-300 border border-red-800 px-2 py-0.5 rounded">
+            READ-ONLY INSPECTION
+          </span>
+        </div>
+      )}
+
       {/* 1. Header & Farm Selector */}
       <div className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -182,31 +216,57 @@ export const PondsManagementView = ({
             )}
           </div>
 
-          {/* Nút Khởi tạo Trang Trại Mới */}
-          <button
-            onClick={() => {
-              setEditingFarm(null);
-              setIsFarmModalOpen(true);
-            }}
-            className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold rounded-xl flex items-center gap-1 transition cursor-pointer"
-            title="Khai báo thêm trang trại mới"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Thêm Trại</span>
-          </button>
+          {/* Nút Sửa / Xóa Trang trại (Chỉ dành cho Manager sở hữu) */}
+          {canManage && selectedFarm && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  setEditingFarm(selectedFarm);
+                  setIsFarmModalOpen(true);
+                }}
+                className="p-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl transition cursor-pointer"
+                title="Sửa thông tin trang trại"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleDeleteFarm}
+                className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition cursor-pointer"
+                title="Xóa mềm trang trại"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
-          {/* Nút Khởi tạo Ao Mới */}
-          <button
-            onClick={() => {
-              setEditingPond(null);
-              setIsPondModalOpen(true);
-            }}
-            disabled={!selectedFarm && farms.length > 0}
-            className="px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl shadow-sm flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
-          >
-            <Plus className="w-4 h-4 text-emerald-400" />
-            <span>Khai Báo Ao Mới</span>
-          </button>
+          {/* Nút Khởi tạo Trang Trại Mới & Khai Báo Ao Mới (Chỉ Manager) */}
+          {canManage && (
+            <>
+              <button
+                onClick={() => {
+                  setEditingFarm(null);
+                  setIsFarmModalOpen(true);
+                }}
+                className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold rounded-xl flex items-center gap-1 transition cursor-pointer"
+                title="Khai báo thêm trang trại mới"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Thêm Trại</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setEditingPond(null);
+                  setIsPondModalOpen(true);
+                }}
+                disabled={!selectedFarm && farms.length > 0}
+                className="px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl shadow-sm flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4 text-emerald-400" />
+                <span>Khai Báo Ao Mới</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -290,51 +350,53 @@ export const PondsManagementView = ({
                   </div>
                 </div>
 
-                {/* Dải Quản Trị: Gán Thiết Bị & Vụ Nuôi FCR */}
-                <div className="flex items-center gap-2 pt-1 font-mono-num text-xs">
-                  <button
-                    onClick={() => {
-                      setClaimTargetPond(pond);
-                      setIsClaimModalOpen(true);
-                    }}
-                    className="flex-1 py-1.5 px-2 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer border border-neutral-200"
-                  >
-                    <Cpu className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Thiết Bị IoT</span>
-                  </button>
+                {/* Dải Quản Trị: Gán Thiết Bị & Vụ Nuôi FCR (Chỉ dành cho Manager) */}
+                {canManage && (
+                  <div className="flex items-center gap-2 pt-1 font-mono-num text-xs">
+                    <button
+                      onClick={() => {
+                        setClaimTargetPond(pond);
+                        setIsClaimModalOpen(true);
+                      }}
+                      className="flex-1 py-1.5 px-2 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer border border-neutral-200"
+                    >
+                      <Cpu className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Thiết Bị IoT</span>
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      setSeasonTargetPond(pond);
-                      setIsSeasonModalOpen(true);
-                    }}
-                    className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border border-emerald-200"
-                  >
-                    <Sprout className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Vụ Nuôi & FCR</span>
-                  </button>
+                    <button
+                      onClick={() => {
+                        setSeasonTargetPond(pond);
+                        setIsSeasonModalOpen(true);
+                      }}
+                      className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border border-emerald-200"
+                    >
+                      <Sprout className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Vụ Nuôi & FCR</span>
+                    </button>
 
-                  {/* Sửa Ao */}
-                  <button
-                    onClick={() => {
-                      setEditingPond(pond);
-                      setIsPondModalOpen(true);
-                    }}
-                    className="p-1.5 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 transition cursor-pointer"
-                    title="Chỉnh sửa thông tin ao"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
+                    {/* Sửa Ao */}
+                    <button
+                      onClick={() => {
+                        setEditingPond(pond);
+                        setIsPondModalOpen(true);
+                      }}
+                      className="p-1.5 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 transition cursor-pointer"
+                      title="Chỉnh sửa thông tin ao"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
 
-                  {/* Xóa Ao */}
-                  <button
-                    onClick={() => handleDeletePond(pond)}
-                    className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition cursor-pointer"
-                    title="Xóa ao nuôi"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                    {/* Xóa Ao */}
+                    <button
+                      onClick={() => handleDeletePond(pond)}
+                      className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition cursor-pointer"
+                      title="Xóa ao nuôi"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Dải Nút Thao Tác SCADA */}

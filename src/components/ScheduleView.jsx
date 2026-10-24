@@ -5,8 +5,10 @@ import {
   Save, 
   Check, 
   HardDrive, 
-  Play
+  Play,
+  Shield
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { feedingService } from '../services/feedingService';
 import { safetyRuleService } from '../services/safetyRuleService';
 
@@ -19,6 +21,8 @@ export const ScheduleView = ({
   pondCode = 'Ao Kỹ Thuật Số 02',
   pondArea = '4.200 m²',
 }) => {
+  const { role } = useAuth();
+  const canEdit = role === 'manager';
   const [aiApplied, setAiApplied] = useState(true);
   const [isSyncingHw, setIsSyncingHw] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState('Hôm nay, 10:30:15');

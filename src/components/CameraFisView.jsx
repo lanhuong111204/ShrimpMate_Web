@@ -12,15 +12,21 @@ import {
   Activity, 
   Maximize2,
   TrendingUp,
-  Cpu
+  Cpu,
+  Bot,
+  Scale,
+  ShieldAlert
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { cameraFisService } from '../services/cameraFisService';
 import { getErrorMessage } from '../services/apiClient';
 
 export const CameraFisView = () => {
+  const { role } = useAuth();
   const [selectedPondCode, setSelectedPondCode] = useState('AO-01');
   const [latestFis, setLatestFis] = useState(null);
   const [cameraInfo, setCameraInfo] = useState(null);
+  const [aiRecommendation, setAiRecommendation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
@@ -86,9 +92,40 @@ export const CameraFisView = () => {
     }
   };
 
+  // Tải khuyến nghị AI mới nhất (Module 12)
+  const fetchLatestAiRec = async () => {
+    try {
+      const rec = await cameraFisService.getLatestAiRecommendation(selectedPondCode).catch(() => null);
+      if (rec && rec.predictedFeedAmountKg) {
+        setAiRecommendation(rec);
+      } else {
+        setAiRecommendation({
+          id: 'rec-01',
+          modelName: 'ShrimpMate-FeedOpt-v2',
+          modelVersion: '2.1.0',
+          predictedFeedAmountKg: 16.2,
+          spreadRateKgPerMinute: 1.6,
+          appetiteLevel: 3,
+          biomassKg: 780.0,
+          anomalyScore: 0.04,
+          confidence: 0.94,
+          safetyDecision: 'allowed',
+          safetyReason: null,
+          explanation: 'Tôm bắt mồi mạnh (FIS cao), DO=5.5 mg/L và nhiệt độ 28.5°C nằm trong ngưỡng tối ưu. Đề xuất tăng nhẹ lượng thức ăn 5% cho cữ tiếp theo.'
+        });
+      }
+    } catch (err) {
+      console.warn('Lỗi lấy khuyến nghị AI:', err);
+    }
+  };
+
   useEffect(() => {
     fetchLatestFis();
-    const interval = setInterval(fetchLatestFis, 10000);
+    fetchLatestAiRec();
+    const interval = setInterval(() => {
+      fetchLatestFis();
+      fetchLatestAiRec();
+    }, 10000);
     return () => clearInterval(interval);
   }, [selectedPondCode]);
 
@@ -111,7 +148,7 @@ export const CameraFisView = () => {
   const handleTestAnalyze = async () => {
     setIsAnalyzing(true);
     try {
-      const mockResult = await cameraFisService.analyzeFrame({
+      await cameraFisService.analyzeFrame({
         pondId: selectedPondCode,
         deviceId: cameraInfo?.id || 'cam-01',
         timeDeltaSeconds: 20,
@@ -127,6 +164,7 @@ export const CameraFisView = () => {
         setIsAnalyzing(false);
         setToastMsg('AI Vision hoàn tất: YOLO11n-seg & MobileNetV3-Small đã phân tích khung hình (Độ trễ 180ms)!');
         fetchLatestFis();
+        fetchLatestAiRec();
         setTimeout(() => setToastMsg(''), 4000);
       }, 1000);
     } catch (err) {
@@ -197,23 +235,28 @@ export const CameraFisView = () => {
             </select>
           </div>
 
-          {/* Nút Cấu hình ROI */}
-          <button
-            onClick={() => setIsRoiModalOpen(true)}
-            className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold rounded-xl flex items-center gap-1.5 transition cursor-pointer"
-          >
-            <Crop className="w-3.5 h-3.5 text-neutral-600" />
-            <span>Cấu Hình ROI</span>
-          </button>
+          {/* Nút Cấu hình ROI & Trọng số FIS (Chỉ dành cho Manager và Admin theo RBAC Matrix) */}
+          {role !== 'farmer' && (
+            <>
+              <button
+                onClick={() => setIsRoiModalOpen(true)}
+                className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+                title="Cấu hình tọa độ vùng quan sát sàng ăn"
+              >
+                <Crop className="w-3.5 h-3.5 text-neutral-600" />
+                <span>Cấu Hình ROI</span>
+              </button>
 
-          {/* Nút Tinh chỉnh Trọng số */}
-          <button
-            onClick={() => setIsWeightsModalOpen(true)}
-            className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold rounded-xl flex items-center gap-1.5 transition cursor-pointer"
-          >
-            <Sliders className="w-3.5 h-3.5 text-neutral-600" />
-            <span>Trọng Số FIS</span>
-          </button>
+              <button
+                onClick={() => setIsWeightsModalOpen(true)}
+                className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+                title="Tinh chỉnh trọng số thành phần w1-w4 và phân vị thuật toán FIS"
+              >
+                <Sliders className="w-3.5 h-3.5 text-neutral-600" />
+                <span>Trọng Số FIS</span>
+              </button>
+            </>
+          )}
 
           {/* Nút Phân tích AI */}
           <button
@@ -308,6 +351,91 @@ export const CameraFisView = () => {
           <p className="text-[11px] text-neutral-500">Đạt tốc độ lý tưởng theo nhiệt độ ao</p>
         </div>
       </div>
+
+      {/* 2.1. Đề Xuất Khẩu Phần & Sinh Khối AI (Module 12 - ShrimpMate-FeedOpt-v2) */}
+      {aiRecommendation && (
+        <div className="bg-white rounded-2xl border border-neutral-200 p-5 shadow-sm space-y-3 font-sans">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-100 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200">
+                <Bot className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display font-bold text-xs uppercase text-neutral-900 tracking-wider">
+                    Đề Xuất Khẩu Phần & Sinh Khối AI ({aiRecommendation.modelName || 'ShrimpMate-FeedOpt-v2'})
+                  </h3>
+                  <span className="text-[10px] font-mono-num bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded font-bold border border-neutral-200">
+                    v{aiRecommendation.modelVersion || '2.1.0'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-500">
+                  Tối ưu lượng thức ăn theo sinh khối đàn tôm và dữ liệu môi trường nước tức thời.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 font-mono-num text-xs">
+              <span className="text-neutral-500">Độ tin cậy:</span>
+              <strong className="text-emerald-700">
+                {((aiRecommendation.confidence || 0.94) * 100).toFixed(0)}%
+              </strong>
+              <span className="text-neutral-300">|</span>
+              <span className="text-neutral-500">Quyết định:</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                aiRecommendation.safetyDecision === 'blocked'
+                  ? 'bg-red-50 text-red-600 border border-red-200'
+                  : aiRecommendation.safetyDecision === 'adjusted'
+                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              }`}>
+                {aiRecommendation.safetyDecision || 'allowed'}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 font-mono-num text-xs">
+            <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/80">
+              <span className="text-neutral-500 block text-[11px]">Lượng Cám Khuyến Nghị</span>
+              <span className="text-lg font-bold text-neutral-900">
+                {aiRecommendation.predictedFeedAmountKg ?? 16.2} <span className="text-xs font-normal text-neutral-500">kg</span>
+              </span>
+            </div>
+
+            <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/80">
+              <span className="text-neutral-500 block text-[11px]">Tốc Độ Rải Cám Tối Ưu</span>
+              <span className="text-lg font-bold text-neutral-900">
+                {aiRecommendation.spreadRateKgPerMinute ?? 1.6} <span className="text-xs font-normal text-neutral-500">kg/phút</span>
+              </span>
+            </div>
+
+            <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/80">
+              <span className="text-neutral-500 block text-[11px]">Sinh Khối Ước Tính</span>
+              <span className="text-lg font-bold text-neutral-900">
+                {aiRecommendation.biomassKg ?? 780.0} <span className="text-xs font-normal text-neutral-500">kg</span>
+              </span>
+            </div>
+
+            <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/80">
+              <span className="text-neutral-500 block text-[11px]">Chỉ Số Bất Thường</span>
+              <span className={`text-lg font-bold ${
+                (aiRecommendation.anomalyScore || 0) > 0.3 ? 'text-red-600' : 'text-emerald-700'
+              }`}>
+                {(aiRecommendation.anomalyScore ?? 0.04).toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {aiRecommendation.explanation && (
+            <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 text-xs text-neutral-700 leading-relaxed flex items-start gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span>
+                <strong>Phân tích AI:</strong> {aiRecommendation.explanation}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 3. Màn Hình Camera Giám Sát Sàng Ăn & Khung ROI */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

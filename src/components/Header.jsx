@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ChangePasswordModal } from './auth/ChangePasswordModal';
+import { ProfileModal } from './auth/ProfileModal';
 import { alertService } from '../services/alertService';
 
 export const Header = ({
@@ -27,6 +28,7 @@ export const Header = ({
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isChangePassOpen, setIsChangePassOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   // Tổng kết số lượng sự cố cảnh báo
@@ -208,6 +210,17 @@ export const Header = ({
                 <button
                   onClick={() => {
                     setIsDropdownOpen(false);
+                    setIsProfileOpen(true);
+                  }}
+                  className="w-full px-4 py-2 text-left text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center gap-2.5 transition cursor-pointer"
+                >
+                  <UserIcon className="w-3.5 h-3.5 text-neutral-400" />
+                  <span>Hồ sơ cá nhân</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsDropdownOpen(false);
                     setIsChangePassOpen(true);
                   }}
                   className="w-full px-4 py-2 text-left text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center gap-2.5 transition cursor-pointer"
@@ -258,6 +271,13 @@ export const Header = ({
       <ChangePasswordModal
         isOpen={isChangePassOpen}
         onClose={() => setIsChangePassOpen(false)}
+        onSuccess={() => {}}
+      />
+
+      {/* Modal Cập nhật Hồ sơ cá nhân */}
+      <ProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
         onSuccess={() => {}}
       />
     </header>

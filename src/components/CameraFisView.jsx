@@ -34,7 +34,9 @@ export const CameraFisView = ({
 
   // Modals
   const [isRoiModalOpen, setIsRoiModalOpen] = useState(false);
+  const [roiError, setRoiError] = useState('');
   const [isWeightsModalOpen, setIsWeightsModalOpen] = useState(false);
+  const [weightsError, setWeightsError] = useState('');
 
   // Tọa độ vùng quan sát ROI
   const [roiCoords, setRoiCoords] = useState({
@@ -260,6 +262,7 @@ export const CameraFisView = ({
 
   const handleSaveRoi = async (e) => {
     e.preventDefault();
+    setRoiError('');
     try {
       if (cameraInfo?.id) {
         await cameraFisService.updateRoi(cameraInfo.id, roiCoords);
@@ -268,19 +271,20 @@ export const CameraFisView = ({
       setToastMsg('Đã lưu tọa độ vùng quan sát sàng ăn (ROI) thành công.');
       setTimeout(() => setToastMsg(''), 3000);
     } catch (err) {
-      alert('Lỗi lưu ROI: ' + getErrorMessage(err));
+      setRoiError(getErrorMessage(err, 'Không thể lưu tọa độ vùng quan sát ROI.'));
     }
   };
 
   const handleSaveWeights = async (e) => {
     e.preventDefault();
+    setWeightsError('');
     try {
       await cameraFisService.updateWeights(pondId, weights);
       setIsWeightsModalOpen(false);
       setToastMsg('Đã lưu bộ trọng số thành phần w1–w4 của thuật toán FIS lên máy chủ.');
       setTimeout(() => setToastMsg(''), 3000);
     } catch (err) {
-      alert('Lỗi lưu trọng số: ' + getErrorMessage(err));
+      setWeightsError(getErrorMessage(err, 'Không thể lưu bộ trọng số FIS.'));
     }
   };
 
@@ -358,7 +362,10 @@ export const CameraFisView = ({
           {role !== 'farmer' && (
             <>
               <button
-                onClick={() => setIsRoiModalOpen(true)}
+                onClick={() => {
+                  setRoiError('');
+                  setIsRoiModalOpen(true);
+                }}
                 className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-[#0B1C30] font-semibold rounded-xl flex items-center gap-1.5 transition cursor-pointer"
               >
                 <Crop className="w-3.5 h-3.5 text-[#006398]" />
@@ -366,7 +373,10 @@ export const CameraFisView = ({
               </button>
 
               <button
-                onClick={() => setIsWeightsModalOpen(true)}
+                onClick={() => {
+                  setWeightsError('');
+                  setIsWeightsModalOpen(true);
+                }}
                 className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-[#0B1C30] font-semibold rounded-xl flex items-center gap-1.5 transition cursor-pointer"
               >
                 <Sliders className="w-3.5 h-3.5 text-[#EA580C]" />
@@ -682,8 +692,8 @@ export const CameraFisView = ({
 
       {/* 5. MODAL CẤU HÌNH ROI */}
       {isRoiModalOpen && (
-        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden">
             <div className="px-6 py-4 flex items-center justify-between border-b border-slate-200">
               <div className="flex items-center gap-2">
                 <Crop className="w-4 h-4 text-[#006398]" />
@@ -691,12 +701,24 @@ export const CameraFisView = ({
                   Cấu hình vùng quan sát sàng ăn (ROI)
                 </h3>
               </div>
-              <button onClick={() => setIsRoiModalOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+              <button
+                onClick={() => {
+                  setRoiError('');
+                  setIsRoiModalOpen(false);
+                }}
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleSaveRoi} className="p-6 space-y-4">
+              {roiError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-medium flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <span>{roiError}</span>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3 font-mono-num text-xs">
                 <div>
                   <label className="block text-slate-700 font-semibold mb-1">Tọa độ X</label>
@@ -758,8 +780,8 @@ export const CameraFisView = ({
 
       {/* 6. MODAL TRỌNG SỐ FIS */}
       {isWeightsModalOpen && (
-        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden">
             <div className="px-6 py-4 flex items-center justify-between border-b border-slate-200">
               <div className="flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-[#EA580C]" />
@@ -767,12 +789,24 @@ export const CameraFisView = ({
                   Trọng số thành phần FIS (w1 – w4)
                 </h3>
               </div>
-              <button onClick={() => setIsWeightsModalOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+              <button
+                onClick={() => {
+                  setWeightsError('');
+                  setIsWeightsModalOpen(false);
+                }}
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleSaveWeights} className="p-6 space-y-4">
+              {weightsError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-medium flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <span>{weightsError}</span>
+                </div>
+              )}
               <div className="space-y-3 text-xs">
                 <div>
                   <div className="flex justify-between mb-1">

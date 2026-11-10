@@ -8,12 +8,13 @@ import {
   AlertOctagon, 
   ShieldCheck, 
   Sliders, 
-  Gauge, 
-  RotateCcw, 
+  Gauge,
+  RotateCcw,
   Package,
   Warehouse,
   Waves,
-  Cpu
+  Cpu,
+  AlertCircle
 } from 'lucide-react';
 import { feedingService } from '../services/feedingService';
 import { safetyRuleService } from '../services/safetyRuleService';
@@ -39,6 +40,7 @@ export const FeederControlView = ({
   const [isTestSpinning, setIsTestSpinning] = useState(false);
   const [testCountdown, setTestCountdown] = useState(10);
   const [isSaving, setIsSaving] = useState(false);
+  const [controlError, setControlError] = useState('');
 
   // Số liệu thực tế lấy từ thiết bị Feeder và bản ghi cho ăn trong DB
   const hopperWeight =
@@ -71,7 +73,8 @@ export const FeederControlView = ({
 
   useEffect(() => {
     setIsPaused(feederDevice?.mode === 'manual');
-  }, [feederDevice?.id, feederDevice?.mode]);
+    setControlError('');
+  }, [selectedPond?.id, feederDevice?.id, feederDevice?.mode]);
 
   if (ponds.length === 0 || !selectedPond) {
     return (
@@ -99,10 +102,11 @@ export const FeederControlView = ({
 
   const updateFeederMetadata = async (partialMeta, successMsg) => {
     if (!feederDevice) {
-      onShowToast?.('Ao này chưa được gán thiết bị máy cho ăn.', 'alert');
+      setControlError('Ao này chưa được gán thiết bị máy cho ăn.');
       return;
     }
     setIsSaving(true);
+    setControlError('');
     try {
       await deviceService.updateDevice(feederDevice.id, {
         metadata: {
@@ -113,7 +117,7 @@ export const FeederControlView = ({
       await onRefreshData?.();
       if (successMsg) onShowToast?.(successMsg, 'success');
     } catch (err) {
-      onShowToast?.(getErrorMessage(err, 'Không thể cập nhật thông số thiết bị lên máy chủ.'), 'alert');
+      setControlError(getErrorMessage(err, 'Không thể cập nhật thông số thiết bị lên máy chủ.'));
     } finally {
       setIsSaving(false);
     }
@@ -121,10 +125,11 @@ export const FeederControlView = ({
 
   const handleStartAuto = async () => {
     if (!feederDevice) {
-      onShowToast?.('Ao này chưa có thiết bị máy cho ăn được gán.', 'alert');
+      setControlError('Ao này chưa có thiết bị máy cho ăn được gán.');
       return;
     }
 
+    setControlError('');
     const requestedKg = targetCurrentMeal > 0 ? Math.min(5.0, targetCurrentMeal) : 3.0;
     try {
       const preview = await safetyRuleService
@@ -137,9 +142,8 @@ export const FeederControlView = ({
       if (preview && preview.decision === 'blocked') {
         setSafetyEvaluation(preview);
         setIsSafetyModalOpen(true);
-        onShowToast?.(
-          'Cảnh báo: Quy tắc an toàn từ chối lệnh cho ăn do chất lượng nước chưa đạt ngưỡng.',
-          'alert'
+        setControlError(
+          'Cảnh báo: Quy tắc an toàn từ chối lệnh cho ăn do chất lượng nước chưa đạt ngưỡng.'
         );
         return;
       }
@@ -169,19 +173,19 @@ export const FeederControlView = ({
       setIsPaused(false);
       onShowToast?.(`Đã kích hoạt xả ${requestedKg} kg thức ăn tại ${selectedPond.code}.`, 'success');
     } catch (err) {
-      onShowToast?.(
-        getErrorMessage(err, 'Không thể thực hiện lệnh xả thức ăn (kiểm tra kết nối hoặc quy tắc an toàn).'),
-        'alert'
+      setControlError(
+        getErrorMessage(err, 'Không thể thực hiện lệnh xả thức ăn (kiểm tra kết nối hoặc quy tắc an toàn).')
       );
     }
   };
 
   const handleTriggerEmergencyStop = async () => {
+    setControlError('');
     if (feederDevice?.id) {
       try {
         await deviceService.emergencyStop(feederDevice.id);
       } catch (err) {
-        onShowToast?.(getErrorMessage(err, 'Không thể gửi lệnh dừng khẩn cấp lên máy chủ.'), 'alert');
+        setControlError(getErrorMessage(err, 'Không thể gửi lệnh dừng khẩn cấp lên máy chủ.'));
       }
     }
     onEmergencyStop?.();
@@ -189,6 +193,7 @@ export const FeederControlView = ({
 
   const handlePause = async () => {
     if (!feederDevice) return;
+    setControlError('');
     const nextPaused = !isPaused;
     setIsPaused(nextPaused);
     try {
@@ -204,7 +209,7 @@ export const FeederControlView = ({
       );
     } catch (err) {
       setIsPaused(!nextPaused);
-      onShowToast?.(getErrorMessage(err, 'Không thể đổi chế độ hoạt động của thiết bị.'), 'alert');
+      setControlError(getErrorMessage(err, 'Không thể đổi chế độ hoạt động của thiết bị.'));
     }
   };
 
@@ -229,6 +234,7 @@ export const FeederControlView = ({
 
   const handleAdd2Kg = async () => {
     if (!feederDevice) return;
+    setControlError('');
     try {
       const rec = await feedingService.createRecord(selectedPond.id, {
         deviceId: feederDevice.id,
@@ -248,7 +254,7 @@ export const FeederControlView = ({
         onShowToast?.('Đã bổ sung +2.0 kg cám vào nhật ký cho ăn thực tế.', 'success');
       }
     } catch (err) {
-      onShowToast?.(getErrorMessage(err, 'Không thể thực hiện lệnh phun bù +2.0 kg.'), 'alert');
+      setControlError(getErrorMessage(err, 'Không thể thực hiện lệnh phun bù +2.0 kg.'));
     }
   };
 
@@ -467,6 +473,13 @@ export const FeederControlView = ({
                 Thiết bị: <strong>{feederDevice?.deviceUid || 'Chưa gán'}</strong>
               </span>
             </div>
+
+            {controlError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{controlError}</span>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <button

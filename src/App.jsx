@@ -39,6 +39,28 @@ const calculateAgeDays = (stockingDate) => {
   return Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 };
 
+const isAlertSeverity = (a) => {
+  const sevNum = Number(a?.severity);
+  if (!Number.isNaN(sevNum) && sevNum >= 2) return true;
+  const sevStr = String(a?.severity || '').toLowerCase();
+  if (sevStr === 'critical' || sevStr === 'warning') return true;
+  const typeStr = String(a?.type || '').toUpperCase();
+  return typeStr.startsWith('CRITICAL') || typeStr.startsWith('WARNING') || typeStr.includes('OFFLINE');
+};
+
+const formatLogTimestamp = (iso) => {
+  if (!iso) return '--:--:--';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '--:--:--';
+  return d.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+};
+
 const SCADAAppContent = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -122,7 +144,7 @@ const SCADAAppContent = () => {
         farmService.getFarms(1, 50),
         canReadDevices ? deviceService.getDevices() : Promise.resolve([]),
         canReadSafetyRules ? safetyRuleService.getSafetyRules() : Promise.resolve([]),
-        alertService.getAlerts({ limit: 50 }),
+        alertService.getAlerts({ limit: 100 }),
       ]);
 
       const syncErrors = [];
@@ -153,20 +175,19 @@ const SCADAAppContent = () => {
       setDevices(deviceList);
       setSafetyRules(ruleList);
 
-      // Chuyển đổi cảnh báo thực tế sang danh sách nhật ký vận hành
-      const mappedLogs = alertList.map((a) => ({
-        id: a.id,
-        type: a.severity === 'critical' || a.severity === 'warning' ? 'alert' : 'info',
+      // Chuyển đổi cảnh báo thực tế sang danh sách nhật ký vận hành (chuẩn severity số 1|2|3 và chuỗi)
+      const mappedAlertLogs = alertList.map((a) => ({
+        id: `alert-${a.id}`,
+        type: isAlertSeverity(a) ? 'alert' : 'info',
         title: `${a.type?.toUpperCase() || 'CẢNH BÁO'}${a.pond?.code ? ` • ${a.pond.code}` : ''}`,
         message: a.message,
-        timestamp: a.createdAt
-          ? new Date(a.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-          : '--:--:--',
+        timestamp: formatLogTimestamp(a.createdAt || a.triggeredAt),
+        rawTime: new Date(a.createdAt || a.triggeredAt || 0).getTime() || 0,
         pondId: a.pondId,
         pondCode: a.pond?.code || null,
         status: a.status,
       }));
-      setLogs(mappedLogs);
+      setLogs(mappedAlertLogs);
 
       if (farmList.length === 0) {
         setAllPonds([]);
@@ -317,6 +338,33 @@ const SCADAAppContent = () => {
         })
       );
 
+      // Gộp thêm lịch sử cho ăn thực tế & Safety Rule Engine của từng ao vào Nhật ký vận hành
+      const feedingLogs = enrichedPonds.flatMap((pond) =>
+        (pond.records || []).slice(0, 20).map((r) => {
+          const isBlocked = r.status === 'blocked_by_safety';
+          const amount = r.actualAmountKg ?? r.requestedAmountKg ?? 0;
+          const timeVal = r.createdAt || r.startedAt || r.updatedAt;
+          return {
+            id: `feed-${r.id}`,
+            type: isBlocked ? 'alert' : 'info',
+            title: isBlocked
+              ? `CHẶN CHO ĂN AN TOÀN • ${pond.code}`
+              : `CHO ĂN ${String(r.source || 'MANUAL').toUpperCase()} • ${pond.code}`,
+            message: isBlocked
+              ? r.blockedReason || `Safety Engine chặn lệnh xả ${amount} kg.`
+              : `Trạng thái: ${r.status || 'completed'} • Khối lượng: ${amount} kg.`,
+            timestamp: formatLogTimestamp(timeVal),
+            rawTime: new Date(timeVal || 0).getTime() || 0,
+            pondId: pond.id,
+            pondCode: pond.code,
+            status: r.status,
+          };
+        })
+      );
+
+      const mergedLogs = [...mappedAlertLogs, ...feedingLogs].sort((a, b) => b.rawTime - a.rawTime);
+      setLogs(mergedLogs);
+
       setAllPonds(enrichedPonds);
       setSelectedPondId((prev) => {
         if (prev && enrichedPonds.some((p) => p.id === prev)) return prev;
@@ -346,18 +394,28 @@ const SCADAAppContent = () => {
     return () => clearInterval(pollTimer);
   }, [fetchAllRealData]);
 
-  // Lọc danh sách ao theo trang trại đang chọn trên Header
+  // Lọc danh sách ao, thiết bị và nhật ký vận hành theo đúng trang trại đang chọn trên Header
   const filteredPonds =
     selectedFarmId === 'all'
       ? allPonds
       : allPonds.filter((p) => p.farmId === selectedFarmId);
 
+  const filteredPondIds = new Set(filteredPonds.map((p) => p.id));
+
+  const filteredDevices =
+    selectedFarmId === 'all'
+      ? devices
+      : devices.filter((d) => d.pondId && filteredPondIds.has(d.pondId));
+
+  const filteredLogs =
+    selectedFarmId === 'all'
+      ? logs
+      : logs.filter((l) => l.pondId && filteredPondIds.has(l.pondId));
+
   const activePond =
-    filteredPonds.find((p) => p.id === selectedPondId) ||
-    allPonds.find((p) => p.id === selectedPondId) ||
-    filteredPonds[0] ||
-    allPonds[0] ||
-    null;
+    selectedFarmId === 'all'
+      ? allPonds.find((p) => p.id === selectedPondId) || allPonds[0] || null
+      : filteredPonds.find((p) => p.id === selectedPondId) || filteredPonds[0] || null;
 
   // Kích hoạt Dừng khẩn cấp (E-STOP)
   const handleEmergencyStop = async () => {
@@ -397,8 +455,6 @@ const SCADAAppContent = () => {
         `Đã đồng bộ dữ liệu thực tế: ${farms.length} trang trại, ${allPonds.length} ao nuôi.`,
         'success'
       );
-    } else if (result?.error) {
-      showToast(result.error, 'alert');
     }
   };
 
@@ -513,8 +569,8 @@ const SCADAAppContent = () => {
         <Sidebar
           currentTab={currentTab}
           onSelectTab={(tab) => handleNavigateTab(tab)}
-          activePondCount={allPonds.length}
-          feederReadyCount={devices.filter((d) => d.type === 'feeder' && d.status === 'online').length}
+          activePondCount={filteredPonds.length}
+          feederReadyCount={filteredDevices.filter((d) => d.type === 'feeder' && d.status === 'online').length}
         />
 
         <main className="flex-1 p-3 sm:p-5 lg:p-6 overflow-x-hidden">
@@ -539,8 +595,9 @@ const SCADAAppContent = () => {
               element={
                 <DashboardView
                   farms={farms}
+                  selectedFarmId={selectedFarmId}
                   ponds={filteredPonds}
-                  logs={logs}
+                  logs={filteredLogs}
                   isLoading={isLoadingData}
                   onNavigateTab={handleNavigateTab}
                   onRefillFeed={handleRefillFeed}
@@ -556,8 +613,9 @@ const SCADAAppContent = () => {
               element={
                 <DashboardView
                   farms={farms}
+                  selectedFarmId={selectedFarmId}
                   ponds={filteredPonds}
-                  logs={logs}
+                  logs={filteredLogs}
                   isLoading={isLoadingData}
                   onNavigateTab={handleNavigateTab}
                   onRefillFeed={handleRefillFeed}
@@ -592,7 +650,7 @@ const SCADAAppContent = () => {
               path="/feeder"
               element={
                 <FeederControlView
-                  ponds={allPonds}
+                  ponds={filteredPonds}
                   selectedPond={activePond}
                   onSelectPond={(id) => setSelectedPondId(id)}
                   onNavigateTab={handleNavigateTab}
@@ -607,7 +665,7 @@ const SCADAAppContent = () => {
               path="/schedule"
               element={
                 <ScheduleView
-                  ponds={allPonds}
+                  ponds={filteredPonds}
                   selectedPond={activePond}
                   onSelectPond={(id) => setSelectedPondId(id)}
                   safetyRules={safetyRules}
@@ -620,7 +678,7 @@ const SCADAAppContent = () => {
               path="/camera-fis"
               element={
                 <CameraFisView
-                  ponds={allPonds}
+                  ponds={filteredPonds}
                   selectedPond={activePond}
                   onSelectPond={(id) => setSelectedPondId(id)}
                   onNavigateTab={handleNavigateTab}
@@ -631,7 +689,7 @@ const SCADAAppContent = () => {
               path="/acoustics"
               element={
                 <CameraFisView
-                  ponds={allPonds}
+                  ponds={filteredPonds}
                   selectedPond={activePond}
                   onSelectPond={(id) => setSelectedPondId(id)}
                   onNavigateTab={handleNavigateTab}
@@ -642,12 +700,12 @@ const SCADAAppContent = () => {
               path="/logs"
               element={
                 <ScadaLogsView
-                  logs={logs}
+                  logs={filteredLogs}
                   onExport={() => {
                     const escapeCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
                     const csvContent = [
                       'Thời gian,Mã ao,Sự kiện,Nội dung,Loại',
-                      ...logs.map((l) =>
+                      ...filteredLogs.map((l) =>
                         [
                           escapeCsv(l.timestamp),
                           escapeCsv(l.pondCode || 'TRẠM'),
@@ -675,8 +733,8 @@ const SCADAAppContent = () => {
               path="/iot"
               element={
                 <IoTStationView
-                  devices={devices}
-                  ponds={allPonds}
+                  devices={filteredDevices}
+                  ponds={filteredPonds}
                   onRefreshData={() => fetchAllRealData(true)}
                   onNavigateTab={handleNavigateTab}
                 />
@@ -687,8 +745,9 @@ const SCADAAppContent = () => {
               element={
                 <DashboardView
                   farms={farms}
+                  selectedFarmId={selectedFarmId}
                   ponds={filteredPonds}
-                  logs={logs}
+                  logs={filteredLogs}
                   isLoading={isLoadingData}
                   onNavigateTab={handleNavigateTab}
                   onRefillFeed={handleRefillFeed}

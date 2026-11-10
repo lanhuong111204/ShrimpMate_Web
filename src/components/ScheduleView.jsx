@@ -15,6 +15,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { feedingService } from '../services/feedingService';
 import { safetyRuleService } from '../services/safetyRuleService';
 import { getErrorMessage } from '../services/apiClient';
+import { ConfirmModal } from './common/ConfirmModal';
+import { useConfirm } from '../hooks/useConfirm';
 
 export const ScheduleView = ({
   ponds = [],
@@ -24,6 +26,7 @@ export const ScheduleView = ({
   onRefreshData,
   onShowToast,
 }) => {
+  const { confirm, confirmProps } = useConfirm();
   const { role } = useAuth();
   const canEdit = role === 'manager' || role === 'admin';
   const isAdmin = role === 'admin';
@@ -32,6 +35,9 @@ export const ScheduleView = ({
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [createScheduleError, setCreateScheduleError] = useState('');
+  const [scheduleActionError, setScheduleActionError] = useState('');
+  const [safetyRuleError, setSafetyRuleError] = useState('');
   const [isSyncingHw, setIsSyncingHw] = useState(false);
 
   // Form thêm cữ ăn mới
@@ -52,6 +58,9 @@ export const ScheduleView = ({
     }
     setLoading(true);
     setLoadError('');
+    setCreateScheduleError('');
+    setScheduleActionError('');
+    setSafetyRuleError('');
     try {
       const [schedRes, recRes] = await Promise.allSettled([
         feedingService.getSchedules(selectedPond.id),
@@ -120,6 +129,7 @@ export const ScheduleView = ({
   // Điều chỉnh khối lượng cữ ăn trực tiếp xuống Backend
   const handleStepWeight = async (sched, delta) => {
     if (!canEdit) return;
+    setScheduleActionError('');
     const nextWeight = Math.max(0.5, Number((Number(sched.feedAmountKg) + delta).toFixed(1)));
     try {
       await feedingService.updateSchedule(sched.id, { feedAmountKg: nextWeight });
@@ -128,13 +138,14 @@ export const ScheduleView = ({
       );
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(getErrorMessage(err, 'Không thể cập nhật khối lượng cữ ăn.'), 'alert');
+      setScheduleActionError(getErrorMessage(err, 'Không thể cập nhật khối lượng cữ ăn.'));
     }
   };
 
   // Bật / tắt cữ ăn
   const handleToggleMeal = async (sched) => {
     if (!canEdit) return;
+    setScheduleActionError('');
     const nextEnabled = !sched.isEnabled;
     try {
       await feedingService.updateSchedule(sched.id, { isEnabled: nextEnabled });
@@ -147,7 +158,7 @@ export const ScheduleView = ({
       );
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(getErrorMessage(err, 'Không thể cập nhật trạng thái cữ ăn.'), 'alert');
+      setScheduleActionError(getErrorMessage(err, 'Không thể cập nhật trạng thái cữ ăn.'));
     }
   };
 
@@ -155,6 +166,7 @@ export const ScheduleView = ({
   const handleCreateSchedule = async (e) => {
     e.preventDefault();
     if (!canEdit || !selectedPond?.id) return;
+    setCreateScheduleError('');
     try {
       await feedingService.createSchedule(selectedPond.id, {
         name: newSchedule.name,
@@ -175,13 +187,14 @@ export const ScheduleView = ({
       await loadPondScheduleData();
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(getErrorMessage(err, 'Không thể tạo lịch cho ăn mới.'), 'alert');
+      setCreateScheduleError(getErrorMessage(err, 'Không thể tạo lịch cho ăn mới.'));
     }
   };
 
   // Tạo nhanh bộ 4 cữ tiêu chuẩn nếu ao chưa có lịch
   const handleCreateDefaultFourMeals = async () => {
     if (!canEdit || !selectedPond?.id) return;
+    setScheduleActionError('');
     const defaultMeals = [
       { name: 'Cữ 1 - Sáng sớm', timeOfDay: '06:30', feedAmountKg: 10.0, spreadRateKgPerMinute: 1.5 },
       { name: 'Cữ 2 - Giữa trưa', timeOfDay: '10:30', feedAmountKg: 12.0, spreadRateKgPerMinute: 1.5 },
@@ -200,30 +213,38 @@ export const ScheduleView = ({
       await loadPondScheduleData();
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(getErrorMessage(err, 'Không thể tạo bộ lịch mẫu.'), 'alert');
+      setScheduleActionError(getErrorMessage(err, 'Không thể tạo bộ lịch mẫu.'));
     }
   };
 
   // Xóa cữ ăn
   const handleDeleteSchedule = async (sched) => {
     if (!canEdit) return;
-    if (!window.confirm(`Bạn có chắc muốn xóa "${sched.name} (${sched.timeOfDay})"?`)) return;
+    const ok = await confirm({
+      title: 'Xóa khung giờ cho ăn',
+      message: `Bạn có chắc muốn xóa "${sched.name} (${sched.timeOfDay})"?`,
+      detail: 'Khung giờ này sẽ bị xóa khỏi lịch cho ăn tự động của ao.',
+      confirmText: 'Xóa cữ ăn',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setScheduleActionError('');
     try {
       await feedingService.deleteSchedule(sched.id);
       onShowToast?.(`Đã xóa ${sched.name}.`, 'info');
       await loadPondScheduleData();
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(getErrorMessage(err, 'Không thể xóa lịch cho ăn.'), 'alert');
+      setScheduleActionError(getErrorMessage(err, 'Không thể xóa lịch cho ăn.'));
     }
   };
 
   // Kích hoạt cữ ăn thực tế từ lịch
   const handleRunScheduleNow = async (sched) => {
+    setScheduleActionError('');
     if (!selectedPond?.feederDevice?.id) {
-      onShowToast?.(
-        'Ao nuôi này chưa được gán máy cho ăn tự động (feeder). Vui lòng gán thiết bị trước.',
-        'warning',
+      setScheduleActionError(
+        'Ao nuôi này chưa được gán máy cho ăn tự động (feeder). Vui lòng gán thiết bị trước.'
       );
       return;
     }
@@ -235,9 +256,8 @@ export const ScheduleView = ({
         source: 'schedule',
       });
       if (record.status === 'blocked_by_safety') {
-        onShowToast?.(
-          `Lệnh rải bị chặn bởi quy tắc an toàn: ${record.blockedReason || 'Thông số nước vượt ngưỡng'}`,
-          'warning',
+        setScheduleActionError(
+          `Lệnh rải bị chặn bởi quy tắc an toàn: ${record.blockedReason || 'Thông số nước vượt ngưỡng'}`
         );
       } else {
         onShowToast?.(
@@ -248,14 +268,15 @@ export const ScheduleView = ({
       await loadPondScheduleData();
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(getErrorMessage(err, 'Không thể kích hoạt cữ cho ăn.'), 'alert');
+      setScheduleActionError(getErrorMessage(err, 'Không thể kích hoạt cữ cho ăn.'));
     }
   };
 
   // Bật / tắt quy tắc an toàn (Safety Rule Engine)
   const handleToggleSafetyRule = async (rule) => {
+    setSafetyRuleError('');
     if (!isAdmin) {
-      onShowToast?.('Chỉ quản trị viên hệ thống mới có quyền bật/tắt quy tắc an toàn toàn cục.', 'warning');
+      setSafetyRuleError('Chỉ quản trị viên hệ thống mới có quyền bật/tắt quy tắc an toàn toàn cục.');
       return;
     }
     const nextEnabled = !rule.isEnabled;
@@ -267,7 +288,7 @@ export const ScheduleView = ({
       );
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(getErrorMessage(err, 'Không thể cập nhật quy tắc an toàn.'), 'alert');
+      setSafetyRuleError(getErrorMessage(err, 'Không thể cập nhật quy tắc an toàn.'));
     }
   };
 
@@ -428,7 +449,10 @@ export const ScheduleView = ({
                 </button>
               )}
               <button
-                onClick={() => setShowAddForm(!showAddForm)}
+                onClick={() => {
+                  setCreateScheduleError('');
+                  setShowAddForm(!showAddForm);
+                }}
                 className="h-9 px-3.5 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
@@ -438,12 +462,25 @@ export const ScheduleView = ({
           )}
         </div>
 
+        {scheduleActionError && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{scheduleActionError}</span>
+          </div>
+        )}
+
         {/* Form thêm khung giờ mới */}
         {showAddForm && canEdit && (
           <form
             onSubmit={handleCreateSchedule}
             className="rounded-xl border border-[#FFDBCA] bg-[#FFF8F5] p-4 grid grid-cols-1 sm:grid-cols-5 gap-3 items-end"
           >
+            {createScheduleError && (
+              <div className="sm:col-span-5 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{createScheduleError}</span>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-bold text-[#0B1C30] mb-1">Tên cữ ăn</label>
               <input
@@ -656,6 +693,13 @@ export const ScheduleView = ({
             </span>
           </div>
 
+          {safetyRuleError && (
+            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{safetyRuleError}</span>
+            </div>
+          )}
+
           {safetyRules.length === 0 ? (
             <div className="text-xs text-slate-500 py-6 text-center">
               {isAdmin
@@ -779,6 +823,8 @@ export const ScheduleView = ({
           </div>
         </section>
       </div>
+
+      <ConfirmModal {...confirmProps} />
     </div>
   );
 };

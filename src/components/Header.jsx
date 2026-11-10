@@ -38,12 +38,25 @@ export const Header = ({
   const dropdownRef = useRef(null);
 
   const [alertSummary, setAlertSummary] = useState(null);
+  const pondIdsKey = ponds.map((p) => p.id).join(',');
 
   useEffect(() => {
     const fetchAlertSummary = async () => {
       try {
-        const res = await alertService.getSummary().catch(() => null);
-        if (res) setAlertSummary(res);
+        if (selectedFarmId === 'all') {
+          const res = await alertService.getSummary().catch(() => null);
+          if (res) setAlertSummary(res);
+          return;
+        }
+        if (ponds.length === 0) {
+          setAlertSummary({ open: 0 });
+          return;
+        }
+        const summaries = await Promise.all(
+          ponds.map((p) => alertService.getSummary(p.id).catch(() => null))
+        );
+        const totalOpen = summaries.reduce((sum, s) => sum + Number(s?.open || 0), 0);
+        setAlertSummary({ open: totalOpen });
       } catch (err) {
         console.warn('Lỗi lấy tổng hợp cảnh báo:', err);
       }
@@ -51,7 +64,7 @@ export const Header = ({
     fetchAlertSummary();
     const interval = setInterval(fetchAlertSummary, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedFarmId, pondIdsKey]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {

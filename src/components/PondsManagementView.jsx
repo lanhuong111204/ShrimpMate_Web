@@ -8,9 +8,10 @@ import {
   Cpu, 
   Sprout, 
   Edit3, 
-  Trash2, 
-  RotateCw, 
-  Shield
+  Trash2,
+  RotateCw,
+  Shield,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { farmService } from '../services/farmService';
@@ -20,6 +21,8 @@ import { FarmModal } from './ponds/FarmModal';
 import { PondModal } from './ponds/PondModal';
 import { ClaimDeviceModal } from './ponds/ClaimDeviceModal';
 import { CropSeasonModal } from './ponds/CropSeasonModal';
+import { ConfirmModal } from './common/ConfirmModal';
+import { useConfirm } from '../hooks/useConfirm';
 
 export const PondsManagementView = ({
   ponds: enrichedPonds = [],
@@ -28,6 +31,7 @@ export const PondsManagementView = ({
   onRefillFeed,
   onRefreshGlobalData,
 }) => {
+  const { confirm, confirmProps } = useConfirm();
   const { role } = useAuth();
   const canManage = role === 'manager';
 
@@ -144,11 +148,14 @@ export const PondsManagementView = ({
   // Xóa trang trại
   const handleDeleteFarm = async () => {
     if (!selectedFarm?.id) return;
-    if (
-      !window.confirm(
-        `Bạn có chắc chắn muốn xóa trang trại [${selectedFarm.name}]? Tất cả các ao nuôi trực thuộc sẽ được xóa mềm.`
-      )
-    ) {
+    const ok = await confirm({
+      title: 'Xóa trang trại',
+      message: `Bạn có chắc chắn muốn xóa trang trại [${selectedFarm.name}]?`,
+      detail: 'Tất cả các ao nuôi trực thuộc trang trại này sẽ được xóa mềm.',
+      confirmText: 'Xóa trang trại',
+      variant: 'danger',
+    });
+    if (!ok) {
       return;
     }
 
@@ -157,9 +164,7 @@ export const PondsManagementView = ({
       await fetchFarms();
       onRefreshGlobalData?.();
     } catch (err) {
-      const msg = getErrorMessage(err, 'Không thể xóa trang trại.');
-      setErrorMessage(msg);
-      alert('Lỗi xóa trang trại: ' + msg);
+      setErrorMessage('Lỗi xóa trang trại: ' + getErrorMessage(err, 'Không thể xóa trang trại.'));
     }
   };
 
@@ -167,11 +172,14 @@ export const PondsManagementView = ({
   const handleDeletePond = async (pond) => {
     const targetFarmId = pond.farmId || selectedFarm?.id;
     if (!targetFarmId) return;
-    if (
-      !window.confirm(
-        `Bạn có chắc chắn muốn xóa ao nuôi [${pond.code} - ${pond.name}]? Các thiết bị gán vào ao sẽ được hoàn trả về kho.`
-      )
-    ) {
+    const ok = await confirm({
+      title: 'Xóa ao nuôi',
+      message: `Bạn có chắc chắn muốn xóa ao nuôi [${pond.code} - ${pond.name}]?`,
+      detail: 'Các thiết bị đang gán vào ao này sẽ được hoàn trả về kho.',
+      confirmText: 'Xóa ao nuôi',
+      variant: 'danger',
+    });
+    if (!ok) {
       return;
     }
 
@@ -180,9 +188,7 @@ export const PondsManagementView = ({
       await fetchPonds(targetFarmId);
       onRefreshGlobalData?.();
     } catch (err) {
-      const msg = getErrorMessage(err, 'Không thể xóa ao nuôi.');
-      setErrorMessage(msg);
-      alert('Không thể xóa ao nuôi: ' + msg);
+      setErrorMessage('Không thể xóa ao nuôi: ' + getErrorMessage(err, 'Không thể xóa ao nuôi.'));
     }
   };
 
@@ -585,6 +591,8 @@ export const PondsManagementView = ({
           onRefreshGlobalData?.();
         }}
       />
+
+      <ConfirmModal {...confirmProps} />
     </div>
   );
 };

@@ -21,8 +21,11 @@ import { farmerService } from '../services/farmerService';
 import { farmService } from '../services/farmService';
 import { pondService } from '../services/pondService';
 import { getErrorMessage } from '../services/apiClient';
+import { ConfirmModal } from './common/ConfirmModal';
+import { useConfirm } from '../hooks/useConfirm';
 
 export const FarmersManagementView = () => {
+  const { confirm, confirmProps } = useConfirm();
   const [farmers, setFarmers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -128,17 +131,27 @@ export const FarmersManagementView = () => {
   const handleToggleStatus = async (farmer) => {
     const nextStatus = !farmer.isActive;
     const actionName = nextStatus ? 'mở khóa' : 'khóa';
-    if (!window.confirm(`Bạn có chắc chắn muốn ${actionName} tài khoản [${farmer.fullName}]?`)) {
+    const ok = await confirm({
+      title: nextStatus ? 'Mở khóa tài khoản Farmer' : 'Khóa tài khoản Farmer',
+      message: `Bạn có chắc chắn muốn ${actionName} tài khoản [${farmer.fullName}]?`,
+      detail: nextStatus
+        ? 'Nhân sự sẽ có thể đăng nhập lại trên Web và Mobile App.'
+        : 'Nhân sự sẽ bị chặn đăng nhập cho đến khi được mở khóa.',
+      confirmText: nextStatus ? 'Mở khóa' : 'Khóa tài khoản',
+      variant: nextStatus ? 'success' : 'danger',
+    });
+    if (!ok) {
       return;
     }
 
+    setErrorMessage('');
     try {
       await farmerService.toggleStatus(farmer.id, nextStatus);
       setSuccessToast(`Đã ${actionName} tài khoản thành công.`);
       await fetchFarmers();
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      alert(getErrorMessage(err, 'Lỗi cập nhật trạng thái tài khoản!'));
+      setErrorMessage(getErrorMessage(err, 'Lỗi cập nhật trạng thái tài khoản!'));
     }
   };
 
@@ -191,11 +204,12 @@ export const FarmersManagementView = () => {
     if (!assignmentModal.farmer?.id || !selectedFarmId) return;
 
     if (!assignWholeFarm && selectedPondIds.length === 0) {
-      alert('Vui lòng chọn ít nhất 1 ao nuôi hoặc chọn "Phân công toàn bộ trang trại"!');
+      setAssignmentError('Vui lòng chọn ít nhất 1 ao nuôi hoặc chọn "Phân công toàn bộ trang trại"!');
       return;
     }
 
     setIsSubmitting(true);
+    setAssignmentError('');
     try {
       await farmerService.assignPonds(assignmentModal.farmer.id, {
         farmId: selectedFarmId,
@@ -207,7 +221,7 @@ export const FarmersManagementView = () => {
       await fetchFarmers();
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      alert(getErrorMessage(err, 'Lỗi phân công ao nuôi!'));
+      setAssignmentError(getErrorMessage(err, 'Lỗi phân công ao nuôi!'));
     } finally {
       setIsSubmitting(false);
     }
@@ -216,8 +230,15 @@ export const FarmersManagementView = () => {
   // Thu hồi một phân công
   const handleRevokeAssignment = async (assignmentId) => {
     if (!assignmentModal.farmer?.id) return;
-    if (!window.confirm('Bạn có chắc chắn muốn thu hồi phân công này?')) return;
+    const ok = await confirm({
+      title: 'Thu hồi phân công ao nuôi',
+      message: 'Bạn có chắc chắn muốn thu hồi phân công này?',
+      confirmText: 'Thu hồi',
+      variant: 'danger',
+    });
+    if (!ok) return;
 
+    setAssignmentError('');
     try {
       await farmerService.revokeAssignment(assignmentModal.farmer.id, assignmentId);
       // Tải lại danh sách phân công
@@ -225,15 +246,23 @@ export const FarmersManagementView = () => {
       setCurrentAssignments(Array.isArray(assignRes) ? assignRes : (assignRes?.assignments || []));
       await fetchFarmers();
     } catch (err) {
-      alert(getErrorMessage(err, 'Lỗi thu hồi phân công!'));
+      setAssignmentError(getErrorMessage(err, 'Lỗi thu hồi phân công!'));
     }
   };
 
   // Thu hồi tất cả phân công của Farmer
   const handleRevokeAllAssignments = async () => {
     if (!assignmentModal.farmer?.id) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn thu hồi TOÀN BỘ phân công của [${assignmentModal.farmer.fullName}]?`)) return;
+    const ok = await confirm({
+      title: 'Thu hồi toàn bộ phân công',
+      message: `Bạn có chắc chắn muốn thu hồi TOÀN BỘ phân công của [${assignmentModal.farmer.fullName}]?`,
+      detail: 'Nhân sự này sẽ không còn quyền xem hoặc thao tác trên các ao đã phân công trước đó.',
+      confirmText: 'Thu hồi tất cả',
+      variant: 'danger',
+    });
+    if (!ok) return;
 
+    setAssignmentError('');
     try {
       await farmerService.revokeAllAssignments(assignmentModal.farmer.id);
       setCurrentAssignments([]);
@@ -241,7 +270,7 @@ export const FarmersManagementView = () => {
       setSuccessToast(`Đã thu hồi toàn bộ phân công của [${assignmentModal.farmer.fullName}].`);
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      alert(getErrorMessage(err, 'Lỗi thu hồi toàn bộ phân công!'));
+      setAssignmentError(getErrorMessage(err, 'Lỗi thu hồi toàn bộ phân công!'));
     }
   };
 
@@ -286,7 +315,8 @@ export const FarmersManagementView = () => {
   // Copy password to clipboard
   const handleCopyPassword = () => {
     navigator.clipboard.writeText(initialPasswordModal.password);
-    alert('Đã sao chép mật khẩu vào bộ nhớ tạm!');
+    setSuccessToast('Đã sao chép mật khẩu vào bộ nhớ tạm!');
+    setTimeout(() => setSuccessToast(''), 3000);
   };
 
   return (
@@ -459,8 +489,8 @@ export const FarmersManagementView = () => {
 
       {/* 3. MODAL TẠO FARMER MỚI */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden">
             <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
               <div className="flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-emerald-400" />
@@ -555,8 +585,8 @@ export const FarmersManagementView = () => {
 
       {/* 4. MODAL HIỂN THỊ MẬT KHẨU BAN ĐẦU (CHỈ 1 LẦN DUY NHẤT) */}
       {initialPasswordModal.isOpen && (
-        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-neutral-950/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden">
             <div className="bg-emerald-600 px-6 py-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-2">
                 <Key className="w-5 h-5 text-white" />
@@ -610,8 +640,8 @@ export const FarmersManagementView = () => {
 
       {/* 5. MODAL PHÂN CÔNG AO NUÔI (UC021) */}
       {assignmentModal.isOpen && (
-        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full border border-neutral-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
               <div className="flex items-center gap-2">
                 <Layers className="w-5 h-5 text-emerald-400" />
@@ -790,8 +820,8 @@ export const FarmersManagementView = () => {
 
       {/* 5. MODAL CHỈNH SỬA THÔNG TIN FARMER */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden font-sans">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden font-sans">
             <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
               <div className="flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-emerald-400" />
@@ -864,6 +894,8 @@ export const FarmersManagementView = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal {...confirmProps} />
     </div>
   );
 };

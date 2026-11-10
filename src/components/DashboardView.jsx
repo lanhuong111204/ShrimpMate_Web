@@ -21,6 +21,7 @@ import { getErrorMessage } from '../services/apiClient';
 
 export const DashboardView = ({
   farms = [],
+  selectedFarmId = 'all',
   ponds = [],
   logs = [],
   isLoading = false,
@@ -35,26 +36,41 @@ export const DashboardView = ({
   const [testCountdown, setTestCountdown] = useState(10);
   const [viewMode, setViewMode] = useState('grid');
 
-  // Cảnh báo thời gian thực từ Backend
+  // Cảnh báo thời gian thực từ Backend (lọc đúng theo trang trại đang chọn)
   const [liveAlerts, setLiveAlerts] = useState([]);
   const [alertError, setAlertError] = useState('');
 
-  const fetchAlerts = async () => {
+  const pondIdsKey = ponds.map((p) => p.id).join(',');
+
+  const fetchAlerts = React.useCallback(async () => {
     try {
-      const alertsRes = await alertService.getAlerts({ status: 'open', limit: 8 });
-      const list = Array.isArray(alertsRes) ? alertsRes : (alertsRes?.data || []);
-      setLiveAlerts(list || []);
+      if (selectedFarmId !== 'all' && ponds.length === 0) {
+        setLiveAlerts([]);
+        setAlertError('');
+        return;
+      }
+
+      const alertsRes = await alertService.getAlerts({ status: 'open', limit: 20 });
+      const rawList = Array.isArray(alertsRes) ? alertsRes : (alertsRes?.data || []);
+      const pondIdSet = new Set(ponds.map((p) => p.id));
+
+      const scopedAlerts =
+        selectedFarmId === 'all'
+          ? rawList
+          : rawList.filter((a) => a.pondId && pondIdSet.has(a.pondId));
+
+      setLiveAlerts((scopedAlerts || []).slice(0, 8));
       setAlertError('');
     } catch (err) {
       setAlertError(getErrorMessage(err, 'Không thể tải danh sách cảnh báo từ máy chủ.'));
     }
-  };
+  }, [selectedFarmId, pondIdsKey]);
 
   React.useEffect(() => {
     fetchAlerts();
     const timer = setInterval(fetchAlerts, 15000);
     return () => clearInterval(timer);
-  }, []);
+  }, [fetchAlerts]);
 
   const handleAcknowledgeAlert = async (id) => {
     try {

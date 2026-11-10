@@ -5,8 +5,8 @@ export const SafetyBlockedModal = ({ isOpen, onClose, safetyResult }) => {
   if (!isOpen || !safetyResult) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl max-w-lg w-full border-2 border-red-600 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15 animate-fade-in">
+      <div className="bg-white rounded-2xl max-w-lg w-full border-2 border-red-600 ring-1 ring-red-600/20 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="bg-red-600 px-6 py-4 flex items-center justify-between text-white">
           <div className="flex items-center gap-2.5">

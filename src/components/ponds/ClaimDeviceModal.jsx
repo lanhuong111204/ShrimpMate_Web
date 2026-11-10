@@ -3,8 +3,11 @@ import { X, Cpu, RotateCw, AlertCircle, Plus, Unlink, CheckCircle2, Radio } from
 import { deviceService } from '../../services/deviceService';
 import { pondService } from '../../services/pondService';
 import { getErrorMessage } from '../../services/apiClient';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { useConfirm } from '../../hooks/useConfirm';
 
 export const ClaimDeviceModal = ({ isOpen, onClose, farmId, pond, onSuccess }) => {
+  const { confirm, confirmProps } = useConfirm();
   const [deviceUid, setDeviceUid] = useState('');
   const [assignedDevices, setAssignedDevices] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -76,9 +79,14 @@ export const ClaimDeviceModal = ({ isOpen, onClose, farmId, pond, onSuccess }) =
 
   // Xử lý Gỡ thiết bị (Unassign)
   const handleUnassign = async (deviceId, uid) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn gỡ thiết bị [${uid}] khỏi ao này để trả về kho bảo dưỡng?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Gỡ thiết bị khỏi ao nuôi',
+      message: `Bạn có chắc chắn muốn gỡ thiết bị [${uid}] khỏi ao này để trả về kho bảo dưỡng?`,
+      detail: 'Thiết bị sau khi gỡ có thể được gán lại cho ao khác.',
+      confirmText: 'Gỡ thiết bị',
+      variant: 'warning',
+    });
+    if (!ok) return;
 
     setIsSubmitting(true);
     setErrorMessage('');
@@ -95,8 +103,8 @@ export const ClaimDeviceModal = ({ isOpen, onClose, farmId, pond, onSuccess }) =
   };
 
   return (
-    <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl max-w-lg w-full border border-neutral-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15 animate-fade-in">
+      <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
           <div className="flex items-center gap-2.5">
@@ -247,6 +255,8 @@ export const ClaimDeviceModal = ({ isOpen, onClose, farmId, pond, onSuccess }) =
           </button>
         </div>
       </div>
+
+      <ConfirmModal {...confirmProps} />
     </div>
   );
 };

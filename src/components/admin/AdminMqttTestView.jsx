@@ -24,6 +24,7 @@ export default function AdminMqttTestView() {
   const [spreadRateKgPerMinute, setSpreadRateKgPerMinute] = useState(1.0);
   const [durationSeconds, setDurationSeconds] = useState(30);
   const [sendingCommand, setSendingCommand] = useState(false);
+  const [formError, setFormError] = useState('');
 
   // Command History / Logs
   const [logs, setLogs] = useState([
@@ -85,8 +86,9 @@ export default function AdminMqttTestView() {
 
   const handleTestFeeder = async (e) => {
     e.preventDefault();
+    setFormError('');
     if (!deviceUid.trim()) {
-      alert('Vui lòng nhập hoặc chọn Device UID của máy cho ăn');
+      setFormError('Vui lòng nhập hoặc chọn Device UID của máy cho ăn.');
       return;
     }
 
@@ -109,6 +111,7 @@ export default function AdminMqttTestView() {
       addLog('SUCCESS', `Máy [${deviceUid.trim()}] đã phản hồi lệnh MQTT thành công!`, resData);
     } catch (err) {
       const errMsg = getErrorMessage(err, 'Lỗi gửi lệnh MQTT');
+      setFormError(errMsg);
       addLog('ERROR', `Lỗi phát lệnh MQTT tới [${deviceUid.trim()}]: ${errMsg}`);
     } finally {
       setSendingCommand(false);
@@ -215,6 +218,12 @@ export default function AdminMqttTestView() {
             </div>
 
             <form onSubmit={handleTestFeeder} className="space-y-4">
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-medium flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-bold text-[#0B1C30] mb-1.5">
                   Device UID Thiết bị <span className="text-[#BA1A1A]">*</span>

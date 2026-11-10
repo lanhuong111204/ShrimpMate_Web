@@ -30,6 +30,7 @@ import { safetyRuleService } from './services/safetyRuleService';
 import { cameraFisService } from './services/cameraFisService';
 import { alertService } from './services/alertService';
 import { getErrorMessage } from './services/apiClient';
+import { formatLogTimestamp, mapAlertToLogItem } from './utils/alertHelpers';
 
 const calculateAgeDays = (stockingDate) => {
   if (!stockingDate) return null;
@@ -37,28 +38,6 @@ const calculateAgeDays = (stockingDate) => {
   if (Number.isNaN(start.getTime())) return null;
   const diffMs = Date.now() - start.getTime();
   return Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-};
-
-const isAlertSeverity = (a) => {
-  const sevNum = Number(a?.severity);
-  if (!Number.isNaN(sevNum) && sevNum >= 2) return true;
-  const sevStr = String(a?.severity || '').toLowerCase();
-  if (sevStr === 'critical' || sevStr === 'warning') return true;
-  const typeStr = String(a?.type || '').toUpperCase();
-  return typeStr.startsWith('CRITICAL') || typeStr.startsWith('WARNING') || typeStr.includes('OFFLINE');
-};
-
-const formatLogTimestamp = (iso) => {
-  if (!iso) return '--:--:--';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '--:--:--';
-  return d.toLocaleString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
 };
 
 const SCADAAppContent = () => {
@@ -100,6 +79,7 @@ const SCADAAppContent = () => {
   const [devices, setDevices] = useState([]);
   const [safetyRules, setSafetyRules] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [alertRefreshKey, setAlertRefreshKey] = useState(0);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [dataError, setDataError] = useState('');
 
@@ -175,18 +155,8 @@ const SCADAAppContent = () => {
       setDevices(deviceList);
       setSafetyRules(ruleList);
 
-      // Chuyển đổi cảnh báo thực tế sang danh sách nhật ký vận hành (chuẩn severity số 1|2|3 và chuỗi)
-      const mappedAlertLogs = alertList.map((a) => ({
-        id: `alert-${a.id}`,
-        type: isAlertSeverity(a) ? 'alert' : 'info',
-        title: `${a.type?.toUpperCase() || 'CẢNH BÁO'}${a.pond?.code ? ` • ${a.pond.code}` : ''}`,
-        message: a.message,
-        timestamp: formatLogTimestamp(a.createdAt || a.triggeredAt),
-        rawTime: new Date(a.createdAt || a.triggeredAt || 0).getTime() || 0,
-        pondId: a.pondId,
-        pondCode: a.pond?.code || null,
-        status: a.status,
-      }));
+      // Chuyển đổi cảnh báo thực tế sang danh sách nhật ký vận hành (giữ đủ severity, device, actionRecommendation)
+      const mappedAlertLogs = alertList.map(mapAlertToLogItem);
       setLogs(mappedAlertLogs);
 
       if (farmList.length === 0) {
@@ -346,6 +316,8 @@ const SCADAAppContent = () => {
           const timeVal = r.createdAt || r.startedAt || r.updatedAt;
           return {
             id: `feed-${r.id}`,
+            kind: 'feeding',
+            severityLevel: isBlocked ? 2 : 1,
             type: isBlocked ? 'alert' : 'info',
             title: isBlocked
               ? `CHẶN CHO ĂN AN TOÀN • ${pond.code}`
@@ -357,6 +329,7 @@ const SCADAAppContent = () => {
             rawTime: new Date(timeVal || 0).getTime() || 0,
             pondId: pond.id,
             pondCode: pond.code,
+            pondName: pond.name,
             status: r.status,
           };
         })
@@ -539,6 +512,11 @@ const SCADAAppContent = () => {
     );
   };
 
+  const handleAlertsChanged = useCallback(() => {
+    setAlertRefreshKey((prev) => prev + 1);
+    fetchAllRealData(true);
+  }, [fetchAllRealData]);
+
   const handleNavigateTab = (tab, pondId) => {
     if (pondId !== undefined && pondId !== null) {
       setSelectedPondId(pondId);
@@ -562,6 +540,7 @@ const SCADAAppContent = () => {
         ponds={filteredPonds}
         activePond={activePond}
         onSelectPond={(pId) => setSelectedPondId(pId)}
+        alertRefreshKey={alertRefreshKey}
       />
 
       {/* 2. Khung nội dung chính */}
@@ -599,6 +578,8 @@ const SCADAAppContent = () => {
                   ponds={filteredPonds}
                   logs={filteredLogs}
                   isLoading={isLoadingData}
+                  alertRefreshKey={alertRefreshKey}
+                  onAlertsChanged={handleAlertsChanged}
                   onNavigateTab={handleNavigateTab}
                   onRefillFeed={handleRefillFeed}
                   onTogglePondPause={handleTogglePondPause}
@@ -617,6 +598,8 @@ const SCADAAppContent = () => {
                   ponds={filteredPonds}
                   logs={filteredLogs}
                   isLoading={isLoadingData}
+                  alertRefreshKey={alertRefreshKey}
+                  onAlertsChanged={handleAlertsChanged}
                   onNavigateTab={handleNavigateTab}
                   onRefillFeed={handleRefillFeed}
                   onTogglePondPause={handleTogglePondPause}
@@ -701,17 +684,24 @@ const SCADAAppContent = () => {
               element={
                 <ScadaLogsView
                   logs={filteredLogs}
-                  onExport={() => {
+                  ponds={filteredPonds}
+                  selectedFarmId={selectedFarmId}
+                  alertRefreshKey={alertRefreshKey}
+                  onAlertsChanged={handleAlertsChanged}
+                  onShowToast={showToast}
+                  onExport={(exportItems = filteredLogs) => {
+                    const itemsToExport = Array.isArray(exportItems) ? exportItems : filteredLogs;
                     const escapeCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
                     const csvContent = [
-                      'Thời gian,Mã ao,Sự kiện,Nội dung,Loại',
-                      ...filteredLogs.map((l) =>
+                      'Thời gian,Mã ao,Sự kiện,Nội dung,Loại,Trạng thái',
+                      ...itemsToExport.map((l) =>
                         [
                           escapeCsv(l.timestamp),
                           escapeCsv(l.pondCode || 'TRẠM'),
                           escapeCsv(l.title),
                           escapeCsv(l.message),
                           escapeCsv(l.type),
+                          escapeCsv(l.status || ''),
                         ].join(',')
                       ),
                     ].join('\n');
@@ -749,6 +739,8 @@ const SCADAAppContent = () => {
                   ponds={filteredPonds}
                   logs={filteredLogs}
                   isLoading={isLoadingData}
+                  alertRefreshKey={alertRefreshKey}
+                  onAlertsChanged={handleAlertsChanged}
                   onNavigateTab={handleNavigateTab}
                   onRefillFeed={handleRefillFeed}
                   onTogglePondPause={handleTogglePondPause}

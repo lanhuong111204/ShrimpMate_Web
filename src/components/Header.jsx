@@ -1,21 +1,48 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  AlertOctagon, 
-  RotateCw, 
-  ChevronDown, 
-  LogOut, 
-  KeyRound, 
-  User as UserIcon, 
+import {
+  AlertOctagon,
+  AlertTriangle,
+  RotateCw,
+  ChevronDown,
+  LogOut,
+  KeyRound,
+  User as UserIcon,
   Shield,
   Bell,
   Waves,
-  Warehouse
+  Warehouse,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ChangePasswordModal } from './auth/ChangePasswordModal';
 import { ProfileModal } from './auth/ProfileModal';
 import { alertService } from '../services/alertService';
+
+const EMPTY_ALERT_SUMMARY = {
+  total: 0,
+  open: 0,
+  acknowledged: 0,
+  resolved: 0,
+  bySeverity: {
+    critical: 0,
+    warning: 0,
+    monitoring: 0,
+  },
+};
+
+const normalizeAlertSummary = (res) => ({
+  total: Number(res?.total || 0),
+  open: Number(res?.open || 0),
+  acknowledged: Number(res?.acknowledged || 0),
+  resolved: Number(res?.resolved || 0),
+  bySeverity: {
+    critical: Number(res?.bySeverity?.critical || 0),
+    warning: Number(res?.bySeverity?.warning || 0),
+    monitoring: Number(res?.bySeverity?.monitoring || 0),
+  },
+});
 
 export const Header = ({
   currentTime,
@@ -28,48 +55,86 @@ export const Header = ({
   ponds = [],
   activePond = null,
   onSelectPond,
+  alertRefreshKey = 0,
 }) => {
   const navigate = useNavigate();
   const { user, role, logout } = useAuth();
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isAlertMenuOpen, setIsAlertMenuOpen] = useState(false);
   const [isChangePassOpen, setIsChangePassOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const alertMenuRef = useRef(null);
 
   const [alertSummary, setAlertSummary] = useState(null);
   const pondIdsKey = ponds.map((p) => p.id).join(',');
 
-  useEffect(() => {
-    const fetchAlertSummary = async () => {
-      try {
-        if (selectedFarmId === 'all') {
-          const res = await alertService.getSummary().catch(() => null);
-          if (res) setAlertSummary(res);
-          return;
-        }
-        if (ponds.length === 0) {
-          setAlertSummary({ open: 0 });
-          return;
-        }
-        const summaries = await Promise.all(
-          ponds.map((p) => alertService.getSummary(p.id).catch(() => null))
-        );
-        const totalOpen = summaries.reduce((sum, s) => sum + Number(s?.open || 0), 0);
-        setAlertSummary({ open: totalOpen });
-      } catch (err) {
-        console.warn('Lỗi lấy tổng hợp cảnh báo:', err);
+  const fetchAlertSummary = useCallback(async () => {
+    try {
+      if (selectedFarmId !== 'all' && !pondIdsKey) {
+        setAlertSummary(EMPTY_ALERT_SUMMARY);
+        return;
       }
-    };
-    fetchAlertSummary();
+
+      if (selectedFarmId === 'all' || farms.length <= 1) {
+        const res = await alertService.getSummary().catch(() => null);
+        if (res) setAlertSummary(normalizeAlertSummary(res));
+        return;
+      }
+
+      const pondIdList = pondIdsKey.split(',').filter(Boolean);
+      const summaries = await Promise.all(
+        pondIdList.map((pId) => alertService.getSummary(pId).catch(() => null))
+      );
+
+      const aggregated = summaries.reduce(
+        (acc, item) => {
+          if (!item) return acc;
+          return {
+            total: acc.total + Number(item.total || 0),
+            open: acc.open + Number(item.open || 0),
+            acknowledged: acc.acknowledged + Number(item.acknowledged || 0),
+            resolved: acc.resolved + Number(item.resolved || 0),
+            bySeverity: {
+              critical: acc.bySeverity.critical + Number(item.bySeverity?.critical || 0),
+              warning: acc.bySeverity.warning + Number(item.bySeverity?.warning || 0),
+              monitoring: acc.bySeverity.monitoring + Number(item.bySeverity?.monitoring || 0),
+            },
+          };
+        },
+        {
+          total: 0,
+          open: 0,
+          acknowledged: 0,
+          resolved: 0,
+          bySeverity: { critical: 0, warning: 0, monitoring: 0 },
+        }
+      );
+      setAlertSummary(aggregated);
+    } catch (err) {
+      console.warn('Lỗi lấy tổng hợp cảnh báo:', err);
+    }
+  }, [selectedFarmId, farms.length, pondIdsKey]);
+
+  useEffect(() => {
+    const initialTimer = setTimeout(() => {
+      fetchAlertSummary();
+    }, 0);
     const interval = setInterval(fetchAlertSummary, 15000);
-    return () => clearInterval(interval);
-  }, [selectedFarmId, pondIdsKey]);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [fetchAlertSummary, alertRefreshKey]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
+      }
+      if (alertMenuRef.current && !alertMenuRef.current.contains(event.target)) {
+        setIsAlertMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -207,19 +272,144 @@ export const Header = ({
           <span className="hidden sm:inline text-slate-600">Đồng bộ</span>
         </button>
 
-        {/* Alerts Bell */}
-        <button
-          onClick={() => navigate('/logs')}
-          title="Xem nhật ký và cảnh báo"
-          className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-[#F8F9FF] hover:bg-[#FFF8F5] text-[#0B1C30] border border-slate-200 transition cursor-pointer"
-        >
-          <Bell className="w-4 h-4" />
-          {alertSummary?.open > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-[#BA1A1A] text-white font-mono-num font-bold text-[10px] flex items-center justify-center">
-              {alertSummary.open}
-            </span>
-          )}
-        </button>
+        {/* Alerts Bell & Quick Summary Popover */}
+        <div className="relative" ref={alertMenuRef}>
+          {(() => {
+            const openCount = Number(alertSummary?.open || 0);
+            const criticalCount = Number(alertSummary?.bySeverity?.critical || 0);
+            const warningCount = Number(alertSummary?.bySeverity?.warning || 0);
+            const ackCount = Number(alertSummary?.acknowledged || 0);
+            const resolvedCount = Number(alertSummary?.resolved || 0);
+            const totalCount = Number(alertSummary?.total || 0);
+            const selectedFarmName =
+              selectedFarmId === 'all'
+                ? `Tất cả trang trại (${farms.length})`
+                : farms.find((f) => f.id === selectedFarmId)?.name || 'Trang trại đang chọn';
+
+            const goLogsWithQuery = (query = '') => {
+              setIsAlertMenuOpen(false);
+              navigate(query ? `/logs?${query}` : '/logs');
+            };
+
+            return (
+              <>
+                <button
+                  onClick={() => setIsAlertMenuOpen((prev) => !prev)}
+                  title={
+                    criticalCount > 0
+                      ? `${openCount} cảnh báo chưa xử lý (${criticalCount} nguy cấp)`
+                      : 'Xem tổng quan cảnh báo'
+                  }
+                  className={`relative flex items-center justify-center w-9 h-9 rounded-xl border transition cursor-pointer ${
+                    criticalCount > 0
+                      ? 'bg-red-50 hover:bg-red-100 text-[#BA1A1A] border-red-200'
+                      : 'bg-[#F8F9FF] hover:bg-[#FFF8F5] text-[#0B1C30] border-slate-200'
+                  }`}
+                >
+                  <Bell className="w-4 h-4" />
+                  {openCount > 0 && (
+                    <span
+                      className={`absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full text-white font-mono-num font-bold text-[10px] flex items-center justify-center shadow-xs ${
+                        criticalCount > 0 ? 'bg-[#BA1A1A]' : 'bg-[#EA580C]'
+                      }`}
+                    >
+                      {openCount > 99 ? '99+' : openCount}
+                    </span>
+                  )}
+                </button>
+
+                {isAlertMenuOpen && (
+                  <div className="absolute right-0 mt-1.5 w-72 rounded-2xl bg-white border border-slate-200 shadow-lg p-3.5 z-50 text-xs font-sans space-y-3">
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                      <div>
+                        <p className="font-bold text-[#0B1C30] text-sm">Tổng quan cảnh báo</p>
+                        <p className="text-[11px] text-slate-500 truncate max-w-[190px]">
+                          {selectedFarmName}
+                        </p>
+                      </div>
+                      <button
+                        onClick={fetchAlertSummary}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer"
+                        title="Cập nhật lại số liệu"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => goLogsWithQuery('severity=3')}
+                        className="p-2.5 rounded-xl bg-red-50/80 hover:bg-red-100/80 border border-red-200 text-left transition cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between text-[#BA1A1A] font-bold">
+                          <span>Nguy cấp</span>
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="text-lg font-mono-num font-bold text-[#BA1A1A] mt-0.5">
+                          {criticalCount}
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => goLogsWithQuery('severity=2')}
+                        className="p-2.5 rounded-xl bg-amber-50/80 hover:bg-amber-100/80 border border-amber-200 text-left transition cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between text-[#9D4300] font-bold">
+                          <span>Cảnh báo</span>
+                          <AlertOctagon className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="text-lg font-mono-num font-bold text-[#9D4300] mt-0.5">
+                          {warningCount}
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => goLogsWithQuery('status=open')}
+                        className="p-2.5 rounded-xl bg-[#FFF8F5] hover:bg-[#FFDBCA]/40 border border-[#FFDBCA] text-left transition cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between text-[#EA580C] font-bold">
+                          <span>Chưa xử lý</span>
+                          <Bell className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="text-lg font-mono-num font-bold text-[#0B1C30] mt-0.5">
+                          {openCount}
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => goLogsWithQuery('status=acknowledged')}
+                        className="p-2.5 rounded-xl bg-[#EFF4FF] hover:bg-[#D3E4FE]/60 border border-[#D3E4FE] text-left transition cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between text-[#006398] font-bold">
+                          <span>Đang xử lý</span>
+                          <Clock className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="text-lg font-mono-num font-bold text-[#0B1C30] mt-0.5">
+                          {ackCount}
+                        </div>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 px-0.5">
+                      <span>Tổng ghi nhận: <strong className="font-mono-num text-[#0B1C30]">{totalCount}</strong></span>
+                      <span className="inline-flex items-center gap-1 text-[#006E2D] font-semibold">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Đã xong: {resolvedCount}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => goLogsWithQuery()}
+                      className="w-full py-2 rounded-xl bg-[#0B1C30] hover:bg-[#1e3a5f] text-white font-bold text-xs transition cursor-pointer"
+                    >
+                      Mở Nhật ký & Xử lý sự cố →
+                    </button>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
 
         {/* User Profile Dropdown */}
         <div className="relative" ref={dropdownRef}>

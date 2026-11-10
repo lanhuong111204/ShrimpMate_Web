@@ -7,6 +7,8 @@ import {
   LayoutGrid, 
   List,
   AlertTriangle, 
+  AlertOctagon,
+  Lightbulb,
   CheckCircle2, 
   ShieldCheck,
   ArrowUpRight,
@@ -18,6 +20,11 @@ import {
 } from 'lucide-react';
 import { alertService } from '../services/alertService';
 import { getErrorMessage } from '../services/apiClient';
+import {
+  getAlertSeverityLevel,
+  getSeverityMeta,
+  formatLogTimestamp,
+} from '../utils/alertHelpers';
 
 export const DashboardView = ({
   farms = [],
@@ -25,6 +32,8 @@ export const DashboardView = ({
   ponds = [],
   logs = [],
   isLoading = false,
+  alertRefreshKey = 0,
+  onAlertsChanged,
   onNavigateTab,
   onRefillFeed,
   onTogglePondPause,
@@ -44,22 +53,49 @@ export const DashboardView = ({
 
   const fetchAlerts = React.useCallback(async () => {
     try {
-      if (selectedFarmId !== 'all' && ponds.length === 0) {
+      const pondIdList = pondIdsKey ? pondIdsKey.split(',').filter(Boolean) : [];
+
+      if (selectedFarmId !== 'all' && pondIdList.length === 0) {
         setLiveAlerts([]);
         setAlertError('');
         return;
       }
 
-      const alertsRes = await alertService.getAlerts({ status: 'open', limit: 20 });
-      const rawList = Array.isArray(alertsRes) ? alertsRes : (alertsRes?.data || []);
-      const pondIdSet = new Set(ponds.map((p) => p.id));
+      if (selectedFarmId === 'all' || pondIdList.length === 1) {
+        const scopedPondId = selectedFarmId !== 'all' ? pondIdList[0] : '';
+        const alertsRes = await alertService.getAlerts({
+          status: 'open',
+          ...(scopedPondId ? { pondId: scopedPondId } : {}),
+          limit: 8,
+        });
+        const rawList = Array.isArray(alertsRes) ? alertsRes : alertsRes?.data || [];
+        setLiveAlerts(rawList.slice(0, 8));
+        setAlertError('');
+        return;
+      }
 
-      const scopedAlerts =
-        selectedFarmId === 'all'
-          ? rawList
-          : rawList.filter((a) => a.pondId && pondIdSet.has(a.pondId));
-
-      setLiveAlerts((scopedAlerts || []).slice(0, 8));
+      const perPondRes = await Promise.all(
+        pondIdList.map((pId) =>
+          alertService.getAlerts({ status: 'open', pondId: pId, limit: 8 }).catch(() => [])
+        )
+      );
+      const seen = new Set();
+      const merged = [];
+      perPondRes.forEach((res) => {
+        const list = Array.isArray(res) ? res : res?.data || [];
+        list.forEach((item) => {
+          if (!seen.has(item.id)) {
+            seen.add(item.id);
+            merged.push(item);
+          }
+        });
+      });
+      merged.sort(
+        (a, b) =>
+          new Date(b.triggeredAt || b.createdAt || 0).getTime() -
+          new Date(a.triggeredAt || a.createdAt || 0).getTime()
+      );
+      setLiveAlerts(merged.slice(0, 8));
       setAlertError('');
     } catch (err) {
       setAlertError(getErrorMessage(err, 'Không thể tải danh sách cảnh báo từ máy chủ.'));
@@ -67,16 +103,22 @@ export const DashboardView = ({
   }, [selectedFarmId, pondIdsKey]);
 
   React.useEffect(() => {
-    fetchAlerts();
+    const initialTimer = setTimeout(() => {
+      fetchAlerts();
+    }, 0);
     const timer = setInterval(fetchAlerts, 15000);
-    return () => clearInterval(timer);
-  }, [fetchAlerts]);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(timer);
+    };
+  }, [fetchAlerts, alertRefreshKey]);
 
   const handleAcknowledgeAlert = async (id) => {
     try {
       await alertService.acknowledgeAlert(id);
       onShowToast?.('Đã tiếp nhận xử lý sự cố.', 'info');
       await fetchAlerts();
+      onAlertsChanged?.();
     } catch (err) {
       onShowToast?.(getErrorMessage(err, 'Không thể xác nhận tiếp nhận cảnh báo.'), 'alert');
     }
@@ -87,6 +129,7 @@ export const DashboardView = ({
       await alertService.resolveAlert(id);
       onShowToast?.('Đã đánh dấu giải quyết sự cố hoàn tất.', 'success');
       await fetchAlerts();
+      onAlertsChanged?.();
     } catch (err) {
       onShowToast?.(getErrorMessage(err, 'Không thể cập nhật hoàn tất xử lý cảnh báo.'), 'alert');
     }
@@ -777,11 +820,23 @@ export const DashboardView = ({
 
       {/* 5. CẢNH BÁO VÀ NHẬT KÝ VẬN HÀNH THỰC TẾ TỪ BACKEND */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-sm font-bold text-[#0B1C30]">
-              Cảnh báo và sự kiện vận hành mới nhất
-            </h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-bold text-[#0B1C30]">
+                Cảnh báo và sự kiện vận hành mới nhất
+              </h3>
+              {liveAlerts.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-[#9D4300] font-mono-num font-bold text-[11px]">
+                  {liveAlerts.length} đang mở
+                </span>
+              )}
+              {liveAlerts.filter((a) => getAlertSeverityLevel(a) === 3).length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-red-100 text-[#BA1A1A] font-mono-num font-bold text-[11px]">
+                  {liveAlerts.filter((a) => getAlertSeverityLevel(a) === 3).length} nguy cấp
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">
               Dữ liệu cảnh báo thực tế ghi nhận từ cảm biến nước, máy cho ăn và bộ quy tắc an toàn
             </p>
@@ -803,37 +858,81 @@ export const DashboardView = ({
 
         {liveAlerts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {liveAlerts.map((alertItem) => (
-              <div
-                key={alertItem.id}
-                className="p-3.5 rounded-xl border border-amber-200 bg-[#FFF8F5] flex items-start justify-between gap-3 text-xs"
-              >
-                <div className="flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-[#EA580C] shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-bold text-[#9D4300]">
-                      {alertItem.type?.toUpperCase() || 'CẢNH BÁO'}
-                      {alertItem.pond?.code ? ` • ${alertItem.pond.code}` : ''}
-                    </p>
-                    <p className="text-slate-600 mt-0.5">{alertItem.message}</p>
+            {liveAlerts.map((alertItem) => {
+              const sevLevel = getAlertSeverityLevel(alertItem);
+              const sevMeta = getSeverityMeta(sevLevel);
+              const pondLabel = alertItem.pond?.code
+                ? alertItem.pond?.name
+                  ? `${alertItem.pond.code} • ${alertItem.pond.name}`
+                  : alertItem.pond.code
+                : '';
+
+              return (
+                <div
+                  key={alertItem.id}
+                  className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 text-xs transition ${sevMeta.cardClass}`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    {sevLevel === 3 ? (
+                      <AlertOctagon className={`w-4 h-4 shrink-0 mt-0.5 ${sevMeta.iconClass}`} />
+                    ) : (
+                      <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${sevMeta.iconClass}`} />
+                    )}
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`font-bold ${sevMeta.titleClass}`}>
+                            {alertItem.type?.toUpperCase() || 'CẢNH BÁO'}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded-full font-bold text-[10px] ${sevMeta.badgeClass}`}>
+                            {sevMeta.shortLabel}
+                          </span>
+                          {pondLabel && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-white text-[#006398] border border-[#D3E4FE] font-mono-num font-bold text-[10px]">
+                              {pondLabel}
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-mono-num text-[10px] text-slate-500">
+                          {formatLogTimestamp(alertItem.triggeredAt || alertItem.createdAt)}
+                        </span>
+                      </div>
+
+                      <p className="text-slate-700 leading-relaxed">{alertItem.message}</p>
+
+                      {(alertItem.device?.name || alertItem.device?.deviceUid) && (
+                        <div className="inline-flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+                          <Cpu className="w-3 h-3 text-[#006398]" />
+                          <span>{alertItem.device.name || alertItem.device.deviceUid}</span>
+                        </div>
+                      )}
+
+                      {alertItem.metadata?.actionRecommendation && (
+                        <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-white/85 border border-slate-200 text-[#0B1C30] text-[11px] mt-1">
+                          <Lightbulb className="w-3.5 h-3.5 text-[#EA580C] shrink-0 mt-0.5" />
+                          <span>{alertItem.metadata.actionRecommendation}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-black/5">
+                    <button
+                      onClick={() => handleAcknowledgeAlert(alertItem.id)}
+                      className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 cursor-pointer"
+                    >
+                      Tiếp nhận
+                    </button>
+                    <button
+                      onClick={() => handleResolveAlert(alertItem.id)}
+                      className="px-2.5 py-1 rounded-lg bg-[#006E2D] text-white font-semibold hover:bg-[#005320] cursor-pointer"
+                    >
+                      Xử lý xong
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => handleAcknowledgeAlert(alertItem.id)}
-                    className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 cursor-pointer"
-                  >
-                    Tiếp nhận
-                  </button>
-                  <button
-                    onClick={() => handleResolveAlert(alertItem.id)}
-                    className="px-2.5 py-1 rounded-lg bg-[#006E2D] text-white font-semibold hover:bg-[#005320] cursor-pointer"
-                  >
-                    Xử lý xong
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : logs.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

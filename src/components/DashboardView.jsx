@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { 
   PlayCircle, 
   Download, 
-  Scale, 
   Cpu, 
   Wind, 
   LayoutGrid, 
@@ -10,15 +9,20 @@ import {
   AlertTriangle, 
   CheckCircle2, 
   ShieldCheck,
-  Radio,
   ArrowUpRight,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Warehouse,
+  Waves,
+  Plus,
+  RotateCw
 } from 'lucide-react';
 import { alertService } from '../services/alertService';
 
 export const DashboardView = ({
-  ponds,
-  logs,
+  farms = [],
+  ponds = [],
+  logs = [],
+  isLoading = false,
   onNavigateTab,
   onRefillFeed,
   onTogglePondPause,
@@ -28,20 +32,16 @@ export const DashboardView = ({
 }) => {
   const [testingAll, setTestingAll] = useState(false);
   const [testCountdown, setTestCountdown] = useState(10);
-  const [selectedHoverPoint, setSelectedHoverPoint] = useState(null);
-  const [viewMode, setViewMode] = useState('grid'); // Default to Mobile-synced Visual Pond Cards ('grid' | 'table')
+  const [viewMode, setViewMode] = useState('grid');
 
-  // Live Alerts State
+  // Cảnh báo thời gian thực từ Backend
   const [liveAlerts, setLiveAlerts] = useState([]);
 
   const fetchAlerts = async () => {
     try {
-      await alertService.getSummary().catch(() => null);
       const alertsRes = await alertService.getAlerts({ status: 'open', limit: 8 }).catch(() => null);
       const list = Array.isArray(alertsRes) ? alertsRes : (alertsRes?.data || []);
-      if (list && list.length > 0) {
-        setLiveAlerts(list);
-      }
+      setLiveAlerts(list || []);
     } catch (err) {
       console.warn('Lỗi nạp cảnh báo:', err);
     }
@@ -59,7 +59,7 @@ export const DashboardView = ({
       onShowToast?.('Đã tiếp nhận xử lý sự cố.', 'info');
       await fetchAlerts();
     } catch (err) {
-      console.warn('Lỗi ack alert:', err);
+      console.warn('Lỗi xác nhận cảnh báo:', err);
     }
   };
 
@@ -69,36 +69,61 @@ export const DashboardView = ({
       onShowToast?.('Đã đánh dấu giải quyết sự cố hoàn tất.', 'success');
       await fetchAlerts();
     } catch (err) {
-      console.warn('Lỗi resolve alert:', err);
+      console.warn('Lỗi đóng cảnh báo:', err);
     }
   };
 
-  // Calculate high-level KPIs
-  const totalSprayedToday = parseFloat(ponds.reduce((sum, p) => sum + p.sprayedKg, 0).toFixed(1));
-  const targetSprayedToday = parseFloat(ponds.reduce((sum, p) => sum + p.targetKg, 0).toFixed(1));
-  const feedProgressPct = Math.min(100, Math.round((totalSprayedToday / (targetSprayedToday || 1)) * 100));
-  const activeFeeders = ponds.filter((p) => p.status === 'spraying').length;
-  const warningPonds = ponds.filter((p) => p.status === 'empty_hopper' || p.do < 4.5);
-  const avgDo = (ponds.reduce((sum, p) => sum + p.do, 0) / ponds.length).toFixed(2);
-  const avgTemp = (ponds.reduce((sum, p) => sum + p.temp, 0) / ponds.length).toFixed(1);
-  const avgPh = (ponds.reduce((sum, p) => sum + p.ph, 0) / ponds.length).toFixed(1);
+  // Tính toán các chỉ số tổng hợp thực tế từ danh sách ao nuôi trong DB
+  const totalSprayedToday = parseFloat(
+    ponds.reduce((sum, p) => sum + Number(p.sprayedKg || 0), 0).toFixed(1)
+  );
+  const targetSprayedToday = parseFloat(
+    ponds.reduce((sum, p) => sum + Number(p.targetKg || 0), 0).toFixed(1)
+  );
+  const feedProgressPct =
+    targetSprayedToday > 0
+      ? Math.min(100, Math.round((totalSprayedToday / targetSprayedToday) * 100))
+      : 0;
 
-  // SVG Circular Progress Ring math (r = 22, circumference = 2 * PI * 22 = 138.2)
+  const pondsWithDo = ponds.filter((p) => p.do !== null && p.do !== undefined);
+  const pondsWithTemp = ponds.filter((p) => p.temp !== null && p.temp !== undefined);
+  const pondsWithPh = ponds.filter((p) => p.ph !== null && p.ph !== undefined);
+
+  const avgDo =
+    pondsWithDo.length > 0
+      ? (pondsWithDo.reduce((sum, p) => sum + p.do, 0) / pondsWithDo.length).toFixed(2)
+      : null;
+  const avgTemp =
+    pondsWithTemp.length > 0
+      ? (pondsWithTemp.reduce((sum, p) => sum + p.temp, 0) / pondsWithTemp.length).toFixed(1)
+      : null;
+  const avgPh =
+    pondsWithPh.length > 0
+      ? (pondsWithPh.reduce((sum, p) => sum + p.ph, 0) / pondsWithPh.length).toFixed(1)
+      : null;
+
+  const onlineFeeders = ponds.filter((p) => p.feederDevice && p.feederDevice.status === 'online').length;
+  const totalFeeders = ponds.filter((p) => p.feederDevice).length;
+  const warningPonds = ponds.filter(
+    (p) => p.status === 'empty_hopper' || (p.do !== null && p.do < 4.0)
+  );
+
+  // Vòng tròn tiến độ thức ăn (r = 22, chu vi = 138.2)
   const ringCircumference = 138.2;
   const ringOffset = ringCircumference - (feedProgressPct / 100) * ringCircumference;
 
   const handleTestAll = () => {
-    if (testingAll) return;
+    if (testingAll || ponds.length === 0) return;
     setTestingAll(true);
     setTestCountdown(10);
-    onShowToast('Đang kích hoạt quy trình chạy thử tự động 10 giây trên 4 ao nuôi...', 'info');
+    onShowToast(`Đang kích hoạt chạy thử tự động 10 giây trên ${ponds.length} ao nuôi...`, 'info');
 
     const interval = setInterval(() => {
       setTestCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
           setTestingAll(false);
-          onShowToast('Kiểm tra tự động 10s hoàn tất: Cả 4 mâm phun và rơ-le hoạt động trơn tru.', 'success');
+          onShowToast('Kiểm tra tự động 10s hoàn tất.', 'success');
           return 10;
         }
         return prev - 1;
@@ -109,22 +134,25 @@ export const DashboardView = ({
   const handleExportLog = () => {
     const csvContent = [
       'Thời gian,Mã ao,Sự kiện,Loại cảnh báo',
-      ...logs.map((l) => `${l.timestamp},${l.pondId ? 'AO-' + l.pondId : 'TRẠM'},"${l.title} - ${l.message}",${l.type}`)
+      ...logs.map(
+        (l) =>
+          `${l.timestamp},${l.pondCode || 'TRẠM'},"${l.title} - ${l.message}",${l.type}`
+      ),
     ].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `shrimpmate_scada_log_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `shrimpmate_nhat_ky_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    onShowToast('Đã xuất báo cáo nhật ký vận hành ra file CSV thành công!', 'success');
+    onShowToast('Đã xuất báo cáo nhật ký vận hành ra tệp CSV thành công.', 'success');
   };
 
-  const renderStatusBadge = (status) => {
-    if (status === 'empty_hopper') {
+  const renderStatusBadge = (pond) => {
+    if (pond.status === 'empty_hopper') {
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-300">
           <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />
@@ -132,33 +160,33 @@ export const DashboardView = ({
         </span>
       );
     }
-    if (status === 'paused') {
+    if (pond.dbStatus === 'maintenance') {
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-[#FFDBCA] text-[#9D4300]">
           <span className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
-          Tạm dừng
+          Đang cải tạo
         </span>
       );
     }
-    if (status === 'idle') {
+    if (pond.dbStatus === 'inactive') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#006398]" />
-          Chờ cữ kế tiếp
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+          Tạm ngưng
         </span>
       );
     }
     return (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994]">
         <span className="w-1.5 h-1.5 rounded-full bg-[#006E2D]" />
-        Đang rải cám
+        Đang hoạt động
       </span>
     );
   };
 
   return (
     <div className="space-y-5">
-      {/* 1. SAFETY RULE ENGINE INTERLOCK BANNER (Synced with ShrimpMate_Mobile) */}
+      {/* 1. BANNER QUY TẮC AN TOÀN NƯỚC (SAFETY RULE ENGINE) */}
       <div className="rounded-2xl p-4 bg-[#E8F5E9] border border-[#7CF994] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-[#006E2D] text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -166,15 +194,17 @@ export const DashboardView = ({
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-extrabold uppercase tracking-wider text-[#006E2D]">
-                SAFETY RULE ENGINE: ALLOWED
+              <span className="text-xs font-extrabold tracking-wide text-[#006E2D]">
+                Bộ quy tắc an toàn môi trường nước: Đang bảo vệ
               </span>
               <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white text-[#006E2D] border border-[#7CF994]">
-                Cho phép 100% định mức
+                {ponds.length > 0 ? `${ponds.length} ao được giám sát` : 'Chưa có ao nuôi'}
               </span>
             </div>
             <p className="text-xs text-[#005320] mt-0.5 font-medium">
-              Các chỉ số trung bình DO ({avgDo} mg/L), pH ({avgPh}) và Nhiệt độ ({avgTemp}°C) đều nằm trong ngưỡng tối ưu cho phép xả thức ăn tự động.
+              {avgDo !== null
+                ? `Chỉ số trung bình thực tế: DO (${avgDo} mg/L), pH (${avgPh ?? '--'}) và Nhiệt độ (${avgTemp ?? '--'}°C).`
+                : 'Hệ thống tự động kiểm tra nồng độ DO, pH, nhiệt độ và khí độc NH₃ trước mỗi lệnh xả thức ăn.'}
             </p>
           </div>
         </div>
@@ -183,27 +213,27 @@ export const DashboardView = ({
             onClick={() => onNavigateTab('schedule')}
             className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white text-[#006E2D] border border-[#7CF994] hover:bg-[#F0FDF4] transition cursor-pointer"
           >
-            Cấu hình Interlock
+            Xem quy tắc an toàn
           </button>
         </div>
       </div>
 
-      {/* 2. PAGE HEADER & ACTIONS */}
+      {/* 2. TIÊU ĐỀ TRANG & THAO TÁC */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-[#0B1C30] tracking-tight font-display">
             Tổng quan vận hành trang trại
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Đồng bộ thời gian thực lượng thức ăn, 6 chỉ số môi trường nước và sức ăn từng ao nuôi.
+            Số liệu thực tế từ cơ sở dữ liệu: lượng thức ăn, 6 chỉ số môi trường nước và sức ăn từng ao nuôi.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <button
             onClick={handleTestAll}
-            disabled={testingAll}
-            className={`h-9 px-3.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+            disabled={testingAll || ponds.length === 0}
+            className={`h-9 px-3.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
               testingAll
                 ? 'bg-[#FEF3C7] text-[#B45309] border-amber-300'
                 : 'bg-white hover:bg-[#EFF4FF] text-[#006398] border-[#D3E4FE] shadow-2xs'
@@ -223,14 +253,14 @@ export const DashboardView = ({
         </div>
       </div>
 
-      {/* 3. 4 KPI SUMMARY CARDS WITH COLOR ACCENT BARS & CIRCULAR PROGRESS RING */}
+      {/* 3. 4 THẺ KPI TỔNG HỢP TỪ DỮ LIỆU THẬT */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {/* KPI 1: TOTAL FEED WITH SVG CIRCULAR RING (Shrimp Orange #EA580C) */}
+        {/* KPI 1: TỔNG THỨC ĂN HÔM NAY */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 border-l-4 border-l-[#EA580C] shadow-2xs flex flex-col justify-between">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Tổng thức ăn hôm nay
+              <p className="text-[11px] font-bold tracking-wide text-slate-500">
+                Tổng thức ăn đã rải
               </p>
               <div className="mt-2 flex items-baseline gap-1.5">
                 <span className="text-3xl font-extrabold text-[#0B1C30] font-mono-num">
@@ -241,7 +271,6 @@ export const DashboardView = ({
                 </span>
               </div>
             </div>
-            {/* Circular SVG Progress Ring */}
             <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
               <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
                 <circle cx="28" cy="28" r="22" stroke="#FFDBCA" strokeWidth="5" fill="none" />
@@ -263,21 +292,25 @@ export const DashboardView = ({
             </div>
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-            <span className="text-[#006E2D] font-bold">+4.2% tối ưu FCR</span>
-            <span className="text-slate-500 font-medium">Cữ 3/4 đang rải</span>
+            <span className="text-[#006E2D] font-bold">
+              {ponds.length > 0 ? `Tổng hợp từ ${ponds.length} ao` : 'Chưa có ao nuôi'}
+            </span>
+            <span className="text-slate-500 font-medium">
+              {targetSprayedToday > 0 ? 'Đang theo lịch tự động' : 'Chưa có lịch ăn'}
+            </span>
           </div>
         </div>
 
-        {/* KPI 2: DISSOLVED OXYGEN (Ocean Blue #006398) */}
+        {/* KPI 2: OXY HÒA TAN TRUNG BÌNH */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 border-l-4 border-l-[#006398] shadow-2xs flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <p className="text-[11px] font-bold tracking-wide text-slate-500">
                 Oxy hòa tan trung bình (DO)
               </p>
               <div className="mt-2 flex items-baseline gap-1.5">
                 <span className="text-3xl font-extrabold text-[#006398] font-mono-num">
-                  {avgDo}
+                  {avgDo ?? '--'}
                 </span>
                 <span className="text-xs font-semibold text-slate-400 font-mono-num">mg/L</span>
               </div>
@@ -290,29 +323,34 @@ export const DashboardView = ({
             <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-[#006398] to-[#006E2D] rounded-full"
-                style={{ width: `${Math.min(100, (parseFloat(avgDo) / 8.0) * 100)}%` }}
+                style={{ width: avgDo ? `${Math.min(100, (parseFloat(avgDo) / 8.0) * 100)}%` : '0%' }}
               />
             </div>
             <div className="flex justify-between text-[11px] font-medium text-slate-500">
-              <span>Nhiệt: <strong className="text-[#0B1C30]">{avgTemp}°C</strong> • pH: <strong className="text-[#0B1C30]">{avgPh}</strong></span>
-              <span className="text-[#006E2D] font-bold">Đạt chuẩn (&gt; 4.0)</span>
+              <span>
+                Nhiệt: <strong className="text-[#0B1C30]">{avgTemp ? `${avgTemp}°C` : '--'}</strong> • pH:{' '}
+                <strong className="text-[#0B1C30]">{avgPh ?? '--'}</strong>
+              </span>
+              <span className="text-[#006E2D] font-bold">
+                {avgDo ? (parseFloat(avgDo) >= 4.0 ? 'Đạt chuẩn' : 'Cần sục khí') : 'Chưa có số đo'}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* KPI 3: FEEDER STATIONS (Bio Green #006E2D) */}
+        {/* KPI 3: TRẠNG THÁI TRẠM MÁY CHO ĂN */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 border-l-4 border-l-[#006E2D] shadow-2xs flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Trạng thái trạm máy cho ăn
+              <p className="text-[11px] font-bold tracking-wide text-slate-500">
+                Thiết bị máy cho ăn
               </p>
               <div className="mt-2 flex items-baseline gap-1.5">
                 <span className="text-3xl font-extrabold text-[#006E2D] font-mono-num">
-                  0{ponds.length}
+                  {onlineFeeders}
                 </span>
                 <span className="text-xs font-semibold text-slate-400 font-mono-num">
-                  / 0{ponds.length} Online
+                  / {totalFeeders} trực tuyến
                 </span>
               </div>
             </div>
@@ -322,96 +360,129 @@ export const DashboardView = ({
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
             <span className="px-2 py-0.5 rounded-md bg-[#E8F5E9] text-[#006E2D] font-bold">
-              {activeFeeders} Đang rải
+              {onlineFeeders} Sẵn sàng
             </span>
             <span className="px-2 py-0.5 rounded-md bg-[#EFF4FF] text-[#006398] font-bold">
-              {ponds.length - activeFeeders} Chờ / Cảnh báo
+              {ponds.length - totalFeeders} Ao chưa gán máy
             </span>
           </div>
         </div>
 
-        {/* KPI 4: OPERATIONAL ALERTS & FIS APPETITE (Amber #F59E0B) */}
+        {/* KPI 4: CẢNH BÁO VẬN HÀNH */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 border-l-4 border-l-[#F59E0B] shadow-2xs flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Cảnh báo & Sức ăn FIS
+              <p className="text-[11px] font-bold tracking-wide text-slate-500">
+                Cảnh báo môi trường & thiết bị
               </p>
               <div className="mt-2 flex items-baseline gap-1.5">
                 <span className="text-3xl font-extrabold text-[#B45309] font-mono-num">
-                  0{warningPonds.length}
+                  {liveAlerts.length + warningPonds.length}
                 </span>
-                <span className="text-xs font-semibold text-slate-500">Chú ý nhẹ</span>
+                <span className="text-xs font-semibold text-slate-500">sự cố cần chú ý</span>
               </div>
             </div>
             <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#FEF3C7] text-[#B45309]">
-              FIS: Mức 3
+              {liveAlerts.length > 0 ? 'Có cảnh báo mở' : 'Bình thường'}
             </span>
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
             <span className="text-slate-600 font-medium truncate mr-2">
-              Ao B1: Thức ăn phễu &lt; 16%
+              {liveAlerts[0]?.message ||
+                (warningPonds[0] ? `${warningPonds[0].code}: Cần kiểm tra phễu/DO` : 'Tất cả các ao ổn định')}
             </span>
             <button
-              onClick={() => onRefillFeed(3, 25)}
+              onClick={() => onNavigateTab('logs')}
               className="text-[#EA580C] font-bold hover:underline shrink-0 cursor-pointer"
             >
-              +Nạp cám →
+              Xem nhật ký →
             </button>
           </div>
         </div>
       </div>
 
-      {/* 4. POND MONITORING SECTION (MOBILE-SYNCED POND CARDS OR TABLE) */}
+      {/* 4. DANH SÁCH GIÁM SÁT CHI TIẾT TỪNG AO NUÔI */}
       <div className="space-y-3">
-        {/* Section Header & View Toggle */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-[#0B1C30] font-display">
-              Giám sát chi tiết từng Ao nuôi ({ponds.length} Ao)
+              Giám sát chi tiết từng ao nuôi ({ponds.length} ao)
             </h2>
             <p className="text-xs text-slate-500">
-              Bố cục thẻ trực quan đồng bộ với ứng dụng di động ShrimpMate • Bấm vào từng ao để điều khiển máy rải cám
+              Hiển thị dữ liệu thực tế từ cơ sở dữ liệu kèm tên trang trại trực thuộc • Bấm vào từng ao để điều khiển máy rải cám
             </p>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <div className="inline-flex p-1 rounded-xl bg-white border border-slate-200 shadow-2xs">
+          {ponds.length > 0 && (
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <div className="inline-flex p-1 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                    viewMode === 'grid'
+                      ? 'bg-[#EA580C] text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-[#0B1C30]'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Thẻ trực quan</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                    viewMode === 'table'
+                      ? 'bg-[#EA580C] text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-[#0B1C30]'
+                  }`}
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Bảng dữ liệu</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {isLoading ? (
+          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+            <RotateCw className="w-4 h-4 animate-spin text-[#006398]" />
+            <span>Đang đồng bộ dữ liệu thực tế từ cơ sở dữ liệu...</span>
+          </div>
+        ) : ponds.length === 0 ? (
+          /* TRẠNG THÁI RỖNG CHO TÀI KHOẢN MỚI CHƯA CÓ TRANG TRẠI / AO NUÔI */
+          <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center max-w-2xl mx-auto space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#FFF8F5] text-[#EA580C] flex items-center justify-center mx-auto">
+              <Waves className="w-6 h-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-[#0B1C30]">
+                {farms.length === 0
+                  ? 'Chưa có trang trại và ao nuôi nào trong tài khoản của bạn'
+                  : 'Trang trại hiện tại chưa có ao nuôi nào'}
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-lg mx-auto">
+                Hệ thống chỉ hiển thị dữ liệu thật từ cơ sở dữ liệu. Hãy khởi tạo trang trại và khai báo ao nuôi đầu tiên để bắt đầu theo dõi các chỉ số nước, lịch cho ăn và thiết bị IoT.
+              </p>
+            </div>
+            <div className="pt-1">
               <button
-                onClick={() => setViewMode('grid')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-[#EA580C] text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-[#0B1C30]'
-                }`}
+                onClick={() => onNavigateTab('ponds')}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] text-white text-xs font-bold shadow-sm transition cursor-pointer"
               >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span>Thẻ trực quan</span>
-              </button>
-              <button
-                onClick={() => setViewMode('table')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                  viewMode === 'table'
-                    ? 'bg-[#EA580C] text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-[#0B1C30]'
-                }`}
-              >
-                <List className="w-3.5 h-3.5" />
-                <span>Bảng dữ liệu</span>
+                <Plus className="w-4 h-4" />
+                <span>Đi tới Quản lý trang trại & ao nuôi</span>
               </button>
             </div>
           </div>
-        </div>
-
-        {/* MOBILE-SYNCED VISUAL POND CARDS (2x2 Grid) */}
-        {viewMode === 'grid' ? (
+        ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {ponds.map((pond) => {
               const isAlert = pond.status === 'empty_hopper';
-              const isPaused = pond.status === 'paused';
-              const isIdle = pond.status === 'idle';
-              const progressPercent = Math.min(100, Math.round((pond.sprayedKg / (pond.targetKg || 1)) * 100));
-              const hopperPct = Math.round((pond.hopperKg / (pond.maxHopperKg || 70)) * 100);
+              const isPaused = pond.dbStatus === 'maintenance';
+              const progressPercent =
+                pond.targetKg > 0
+                  ? Math.min(100, Math.round((pond.sprayedKg / pond.targetKg) * 100))
+                  : 0;
 
               return (
                 <div
@@ -422,103 +493,109 @@ export const DashboardView = ({
                       : 'border-slate-200 hover:border-[#EA580C]/50'
                   }`}
                 >
-                  {/* Top Header Row */}
+                  {/* Dòng đầu: Tên trang trại + Tên ao + Mã định danh */}
                   <div className="flex items-start justify-between gap-3 mb-3.5">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-start gap-3">
                       <div
                         onClick={() => onNavigateTab('feeder', pond.id)}
-                        className={`w-11 h-11 rounded-xl font-extrabold text-sm flex items-center justify-center font-mono-num cursor-pointer shrink-0 ${
+                        className={`w-11 h-11 rounded-xl font-extrabold text-xs flex items-center justify-center font-mono-num cursor-pointer shrink-0 ${
                           isAlert
                             ? 'bg-[#FEF3C7] text-[#B45309] border border-amber-300'
                             : 'bg-[#FFF8F5] text-[#EA580C] border border-[#FFDBCA]'
                         }`}
                       >
-                        {pond.code.replace('AO-0', 'A')}
+                        {pond.code}
                       </div>
                       <div>
+                        {/* Nhãn Trang trại trực thuộc */}
+                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE] text-[10px] font-bold mb-1">
+                          <Warehouse className="w-3 h-3" />
+                          <span>{pond.farmName || 'Trang trại'}</span>
+                        </div>
                         <button
                           onClick={() => onNavigateTab('feeder', pond.id)}
                           className="text-base font-bold text-[#0B1C30] hover:text-[#EA580C] flex items-center gap-1 cursor-pointer text-left"
                         >
-                          <span>{pond.name} – {pond.shrimpType}</span>
+                          <span>{pond.name}</span>
                           <ArrowUpRight className="w-4 h-4 text-slate-400" />
                         </button>
-                        <p className="text-xs text-slate-500">
-                          Mã: <span className="font-mono-num font-semibold text-slate-700">{pond.code}</span> • {pond.type} • {pond.currentMeal}
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Mã ao: <span className="font-mono-num font-semibold text-slate-700">{pond.code}</span> •{' '}
+                          {pond.shrimpType} • {pond.currentMeal}
                         </p>
                       </div>
                     </div>
-                    {renderStatusBadge(pond.status)}
+                    {renderStatusBadge(pond)}
                   </div>
 
-                  {/* 3-Column Metadata Strip (Synced with Mobile PondCard) */}
+                  {/* Dải 3 thông tin vụ nuôi & diện tích thực tế */}
                   <div className="grid grid-cols-3 gap-2 py-2.5 px-3 rounded-xl bg-[#F8F9FF] border border-slate-100 mb-3.5 text-center">
                     <div>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Tuổi tôm (DOC)</p>
-                      <p className="text-xs font-bold text-[#0B1C30] mt-0.5 font-mono-num">{pond.ageDays} ngày</p>
+                      <p className="text-[10px] text-slate-400 font-bold">Tuổi tôm (DOC)</p>
+                      <p className="text-xs font-bold text-[#0B1C30] mt-0.5 font-mono-num">
+                        {pond.ageDays ? `${pond.ageDays} ngày` : 'Chưa thả'}
+                      </p>
                     </div>
                     <div className="border-x border-slate-200/70">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Mật độ thả</p>
-                      <p className="text-xs font-bold text-[#0B1C30] mt-0.5 font-mono-num">{pond.stockingCount || '240,000 con'}</p>
+                      <p className="text-[10px] text-slate-400 font-bold">Số lượng giống</p>
+                      <p className="text-xs font-bold text-[#0B1C30] mt-0.5 font-mono-num">
+                        {pond.stockingCount}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Diện tích</p>
+                      <p className="text-[10px] text-slate-400 font-bold">Diện tích</p>
                       <p className="text-xs font-bold text-[#0B1C30] mt-0.5 font-mono-num">{pond.area}</p>
                     </div>
                   </div>
 
-                  {/* 4-Column Telemetry Strip (DO, pH, Temp, FIS / Hopper) */}
+                  {/* 4 ô chỉ số cảm biến thực tế */}
                   <div className="grid grid-cols-4 gap-2 mb-4">
                     <div
                       className={`p-2.5 rounded-xl border text-center ${
-                        pond.do >= 5.0
+                        pond.do === null
+                          ? 'bg-slate-50 border-slate-200'
+                          : pond.do >= 5.0
                           ? 'bg-[#F0FDF4] border-[#7CF994]/60'
                           : 'bg-[#FEF3C7]/50 border-amber-200'
                       }`}
                     >
-                      <p className={`text-[10px] font-bold ${pond.do >= 5.0 ? 'text-[#006E2D]' : 'text-[#B45309]'}`}>
-                        Oxy (DO)
-                      </p>
-                      <p className={`text-sm font-extrabold font-mono-num mt-0.5 ${pond.do >= 5.0 ? 'text-[#006E2D]' : 'text-[#B45309]'}`}>
-                        {pond.do.toFixed(2)} <span className="text-[10px] font-normal">mg/L</span>
+                      <p className="text-[10px] font-bold text-[#006E2D]">Oxy (DO)</p>
+                      <p className="text-sm font-extrabold font-mono-num mt-0.5 text-[#006E2D]">
+                        {pond.do !== null ? `${pond.do.toFixed(2)}` : '--'}{' '}
+                        <span className="text-[10px] font-normal">mg/L</span>
                       </p>
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-[#EFF4FF] border border-[#D3E4FE] text-center">
                       <p className="text-[10px] font-bold text-[#006398]">Độ pH</p>
                       <p className="text-sm font-extrabold text-[#006398] font-mono-num mt-0.5">
-                        {pond.ph.toFixed(1)}
+                        {pond.ph !== null ? pond.ph.toFixed(1) : '--'}
                       </p>
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-[#FFF8F5] border border-[#FFDBCA] text-center">
                       <p className="text-[10px] font-bold text-[#9D4300]">Nhiệt độ</p>
                       <p className="text-sm font-extrabold text-[#9D4300] font-mono-num mt-0.5">
-                        {pond.temp.toFixed(1)}°C
+                        {pond.temp !== null ? `${pond.temp.toFixed(1)}°C` : '--'}
                       </p>
                     </div>
 
-                    <div
-                      className={`p-2.5 rounded-xl border text-center ${
-                        isAlert
-                          ? 'bg-[#FFDAD6]/50 border-[#BA1A1A]/30'
-                          : 'bg-[#E8F5E9] border-[#7CF994]'
-                      }`}
-                    >
-                      <p className={`text-[10px] font-bold ${isAlert ? 'text-[#BA1A1A]' : 'text-[#006E2D]'}`}>
-                        {isAlert ? 'Phễu cám' : 'Độ thèm ăn'}
-                      </p>
-                      <p className={`text-xs font-extrabold mt-1 truncate ${isAlert ? 'text-[#BA1A1A]' : 'text-[#006E2D]'}`}>
-                        {isAlert ? `Cạn (${hopperPct}%)` : pond.fisLabel || 'Mức 3'}
+                    <div className="p-2.5 rounded-xl border text-center bg-[#E8F5E9] border-[#7CF994]">
+                      <p className="text-[10px] font-bold text-[#006E2D]">Độ thèm ăn</p>
+                      <p className="text-xs font-extrabold mt-1 truncate text-[#006E2D]">
+                        {pond.fisLabel}
                       </p>
                     </div>
                   </div>
 
-                  {/* Feed Progress Bar (Mobile Orange #EA580C on #FFDBCA track) */}
+                  {/* Thanh tiến độ rải cám */}
                   <div className="space-y-1.5 mb-4">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-500 font-medium">
-                        Tiến độ rải cám hôm nay (Tồn phễu: <strong className="text-[#0B1C30] font-mono-num">{pond.hopperKg} kg</strong>)
+                        Tồn phễu máy cho ăn:{' '}
+                        <strong className="text-[#0B1C30] font-mono-num">
+                          {pond.hopperKg !== null ? `${pond.hopperKg} kg` : 'Chưa gán máy'}
+                        </strong>
                       </span>
                       <span className="font-bold text-[#EA580C] font-mono-num">
                         {pond.sprayedKg} / {pond.targetKg} kg ({progressPercent}%)
@@ -526,63 +603,34 @@ export const DashboardView = ({
                     </div>
                     <div className="w-full h-2.5 bg-[#FFDBCA]/70 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          isAlert
-                            ? 'bg-[#F59E0B]'
-                            : 'bg-gradient-to-r from-[#FB923C] to-[#EA580C]'
-                        }`}
+                        className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-[#FB923C] to-[#EA580C]"
                         style={{ width: `${progressPercent}%` }}
                       />
                     </div>
                   </div>
 
-                  {/* Quick Action Footer */}
+                  {/* Nút thao tác nhanh */}
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => onRunTestFeeder(pond.id)}
-                        disabled={isAlert}
-                        className={`h-8 px-3 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                          isAlert
-                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                            : 'bg-[#EFF4FF] hover:bg-[#DCE9FF] text-[#006398] border-[#D3E4FE]'
-                        }`}
+                        className="h-8 px-3 rounded-xl text-xs font-bold border transition cursor-pointer bg-[#EFF4FF] hover:bg-[#DCE9FF] text-[#006398] border-[#D3E4FE]"
                       >
                         Rải thử 10s
                       </button>
 
-                      {isAlert ? (
-                        <button
-                          onClick={() => onMuteAlarm(pond.id)}
-                          className="h-8 px-3 rounded-xl bg-[#FEF3C7] hover:bg-amber-200 text-[#B45309] text-xs font-bold transition cursor-pointer"
-                        >
-                          Tắt còi báo
-                        </button>
-                      ) : isIdle ? (
-                        <button
-                          onClick={() => onNavigateTab('camera-fis', pond.id)}
-                          className="h-8 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
-                        >
-                          6 Chỉ số nước
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => onTogglePondPause(pond.id)}
-                          className="h-8 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
-                        >
-                          {isPaused ? 'Tiếp tục rải' : 'Tạm dừng'}
-                        </button>
-                      )}
+                      <button
+                        onClick={() => onTogglePondPause(pond.id)}
+                        className="h-8 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                      >
+                        {isPaused ? 'Mở hoạt động' : 'Tạm dừng'}
+                      </button>
                     </div>
 
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => onRefillFeed(pond.id, 25)}
-                        className={`h-8 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
-                          isAlert
-                            ? 'bg-[#EA580C] text-white hover:bg-[#C2410C]'
-                            : 'bg-[#FFF8F5] text-[#9D4300] border border-[#FFDBCA] hover:bg-[#FFDBCA]'
-                        }`}
+                        className="h-8 px-3 rounded-xl text-xs font-bold transition cursor-pointer bg-[#FFF8F5] text-[#9D4300] border border-[#FFDBCA] hover:bg-[#FFDBCA]"
                       >
                         +Nạp 25kg
                       </button>
@@ -600,41 +648,45 @@ export const DashboardView = ({
             })}
           </div>
         ) : (
-          /* TABLE VIEW */
+          /* BẢNG DỮ LIỆU CHI TIẾT */
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-[#F8F9FF] text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <tr className="border-b border-slate-200 bg-[#F8F9FF] text-[11px] font-bold text-slate-500">
+                    <th className="py-3.5 px-4">Trang trại</th>
                     <th className="py-3.5 px-4">Ao nuôi</th>
                     <th className="py-3.5 px-4">Trạng thái</th>
                     <th className="py-3.5 px-4">Môi trường (DO / pH / Nhiệt)</th>
-                    <th className="py-3.5 px-4">Tiến độ cữ hiện tại</th>
+                    <th className="py-3.5 px-4">Tiến độ thức ăn</th>
                     <th className="py-3.5 px-4">Tồn phễu</th>
-                    <th className="py-3.5 px-4">Độ thèm ăn (FIS)</th>
                     <th className="py-3.5 px-4 text-right">Thao tác nhanh</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-sm">
                   {ponds.map((pond) => {
-                    const isAlert = pond.status === 'empty_hopper';
-                    const isPaused = pond.status === 'paused';
-                    const progressPercent = Math.min(100, Math.round((pond.sprayedKg / (pond.targetKg || 1)) * 100));
+                    const progressPercent =
+                      pond.targetKg > 0
+                        ? Math.min(100, Math.round((pond.sprayedKg / pond.targetKg) * 100))
+                        : 0;
 
                     return (
-                      <tr
-                        key={pond.id}
-                        className={`transition ${
-                          isAlert ? 'bg-[#FFF8F5] hover:bg-[#FFDBCA]/30' : 'hover:bg-[#F8F9FF]'
-                        }`}
-                      >
+                      <tr key={pond.id} className="hover:bg-[#F8F9FF] transition">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#EFF4FF] text-[#006398] text-xs font-bold">
+                            <Warehouse className="w-3.5 h-3.5" />
+                            <span>{pond.farmName}</span>
+                          </span>
+                        </td>
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => onNavigateTab('feeder', pond.id)}
                               className="font-bold text-[#0B1C30] hover:text-[#EA580C] flex items-center gap-1 cursor-pointer"
                             >
-                              <span>{pond.name}</span>
+                              <span>
+                                {pond.code} – {pond.name}
+                              </span>
                               <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
                             </button>
                             <span className="text-[11px] font-mono-num text-[#006398] bg-[#EFF4FF] px-1.5 py-0.5 rounded font-semibold">
@@ -642,27 +694,26 @@ export const DashboardView = ({
                             </span>
                           </div>
                           <div className="text-xs text-slate-500 mt-0.5">
-                            {pond.shrimpType} • {pond.ageDays} DOC
+                            {pond.shrimpType} • {pond.ageDays ? `${pond.ageDays} ngày` : 'Chưa thả'}
                           </div>
                         </td>
-
-                        <td className="py-3.5 px-4 whitespace-nowrap">
-                          {renderStatusBadge(pond.status)}
-                        </td>
-
+                        <td className="py-3.5 px-4 whitespace-nowrap">{renderStatusBadge(pond)}</td>
                         <td className="py-3.5 px-4 whitespace-nowrap font-mono-num text-xs">
                           <div className="flex items-center gap-2">
-                            <span className={`font-bold ${pond.do >= 5.0 ? 'text-[#006E2D]' : 'text-[#B45309]'}`}>
-                              {pond.do.toFixed(2)} mg/L
+                            <span className="font-bold text-[#006E2D]">
+                              {pond.do !== null ? `${pond.do.toFixed(2)} mg/L` : '--'}
                             </span>
                             <span className="text-slate-300">|</span>
-                            <span className="text-[#006398] font-bold">pH {pond.ph.toFixed(1)}</span>
+                            <span className="text-[#006398] font-bold">
+                              pH {pond.ph !== null ? pond.ph.toFixed(1) : '--'}
+                            </span>
                             <span className="text-slate-300">|</span>
-                            <span className="text-[#9D4300] font-bold">{pond.temp.toFixed(1)}°C</span>
+                            <span className="text-[#9D4300] font-bold">
+                              {pond.temp !== null ? `${pond.temp.toFixed(1)}°C` : '--'}
+                            </span>
                           </div>
                         </td>
-
-                        <td className="py-3.5 px-4 min-w-[180px]">
+                        <td className="py-3.5 px-4 min-w-[160px]">
                           <div className="flex justify-between text-xs font-mono-num mb-1">
                             <span className="text-slate-500">{pond.currentMeal}</span>
                             <span className="font-bold text-[#EA580C]">
@@ -676,33 +727,16 @@ export const DashboardView = ({
                             />
                           </div>
                         </td>
-
-                        <td className="py-3.5 px-4 whitespace-nowrap font-mono-num text-xs">
-                          <span className={`font-bold ${pond.hopperKg < 2 ? 'text-[#BA1A1A]' : 'text-[#0B1C30]'}`}>
-                            {pond.hopperKg} kg
-                          </span>
+                        <td className="py-3.5 px-4 whitespace-nowrap font-mono-num text-xs font-bold">
+                          {pond.hopperKg !== null ? `${pond.hopperKg} kg` : 'Chưa gán máy'}
                         </td>
-
-                        <td className="py-3.5 px-4 whitespace-nowrap text-xs">
-                          <span className="font-bold text-[#006E2D]">
-                            {pond.fisLabel || pond.hydrophoneStatus}
-                          </span>
-                        </td>
-
                         <td className="py-3.5 px-4 whitespace-nowrap text-right">
                           <div className="inline-flex items-center gap-1.5">
                             <button
                               onClick={() => onRunTestFeeder(pond.id)}
-                              disabled={isAlert}
                               className="h-7 px-2.5 rounded-lg text-xs font-semibold bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE] cursor-pointer"
                             >
                               Rải 10s
-                            </button>
-                            <button
-                              onClick={() => onTogglePondPause(pond.id)}
-                              className="h-7 px-2.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 cursor-pointer"
-                            >
-                              {isPaused ? 'Tiếp tục' : 'Tạm dừng'}
                             </button>
                             <button
                               onClick={() => onRefillFeed(pond.id, 25)}
@@ -722,237 +756,84 @@ export const DashboardView = ({
         )}
       </div>
 
-      {/* 5. BOTTOM ROW: 24H FEED & DO CORRELATION CHART + SAFETY RULE & MQTT LOGS */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* LEFT 8 COLS: 24H CHART SYNCED WITH MOBILE PALETTE */}
-        <div className="xl:col-span-8 bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3.5">
-            <div>
-              <h3 className="text-sm font-bold text-[#0B1C30]">
-                Tương quan Lượng thức ăn & Oxy hòa tan (24 giờ)
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Giám sát tự động lượng cám rải theo từng cữ đối với biến động nồng độ DO trong ao
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4 text-xs font-semibold">
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-xs bg-[#EA580C]" />
-                <span className="text-[#9D4300]">Cữ đang rải</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-xs bg-[#006398]" />
-                <span className="text-[#006398]">Đã hoàn thành</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-1 bg-[#006E2D] rounded-full" />
-                <span className="text-[#006E2D]">Đường cong DO (mg/L)</span>
-              </div>
-            </div>
+      {/* 5. CẢNH BÁO VÀ NHẬT KÝ VẬN HÀNH THỰC TẾ TỪ BACKEND */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-[#0B1C30]">
+              Cảnh báo và sự kiện vận hành mới nhất
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Dữ liệu cảnh báo thực tế ghi nhận từ cảm biến nước, máy cho ăn và bộ quy tắc an toàn
+            </p>
           </div>
-
-          {/* SVG Chart */}
-          <div className="relative pt-2">
-            <div className="h-44 w-full">
-              <svg className="w-full h-full overflow-visible" viewBox="0 0 640 160">
-                <line stroke="#f1f5f9" strokeDasharray="3" strokeWidth="1" x1="40" x2="620" y1="30" />
-                <line stroke="#f1f5f9" strokeDasharray="3" strokeWidth="1" x1="40" x2="620" y1="70" />
-                <line stroke="#f1f5f9" strokeDasharray="3" strokeWidth="1" x1="40" x2="620" y1="110" />
-                <line stroke="#e2e8f0" strokeWidth="1" x1="40" x2="620" y1="140" />
-
-                <text className="fill-slate-400 font-mono-num text-[10px]" textAnchor="end" x="35" y="34">7.0</text>
-                <text className="fill-slate-400 font-mono-num text-[10px]" textAnchor="end" x="35" y="74">5.5</text>
-                <text className="fill-slate-400 font-mono-num text-[10px]" textAnchor="end" x="35" y="114">4.0</text>
-
-                {/* Cữ 1: 06:30 (Completed - Ocean Blue #006398) */}
-                <rect
-                  className="fill-[#006398] hover:fill-[#0B1C30] transition cursor-pointer"
-                  height="65"
-                  rx="4"
-                  width="32"
-                  x="75"
-                  y="75"
-                  onMouseEnter={() => setSelectedHoverPoint('Cữ 1 (06:30): Đã rải 32.0 kg cám • DO 5.8 mg/L')}
-                  onMouseLeave={() => setSelectedHoverPoint(null)}
-                />
-                <text className="fill-[#006398] font-mono-num font-bold text-[11px]" textAnchor="middle" x="91" y="68">32kg</text>
-                <text className="fill-slate-500 font-mono-num text-[10px]" textAnchor="middle" x="91" y="153">06:30</text>
-
-                {/* Cữ 2: 10:30 (Completed - Ocean Blue #006398) */}
-                <rect
-                  className="fill-[#006398] hover:fill-[#0B1C30] transition cursor-pointer"
-                  height="90"
-                  rx="4"
-                  width="32"
-                  x="195"
-                  y="50"
-                  onMouseEnter={() => setSelectedHoverPoint('Cữ 2 (10:30): Đã rải 38.0 kg cám • DO 5.6 mg/L')}
-                  onMouseLeave={() => setSelectedHoverPoint(null)}
-                />
-                <text className="fill-[#006398] font-mono-num font-bold text-[11px]" textAnchor="middle" x="211" y="42">38kg</text>
-                <text className="fill-slate-500 font-mono-num text-[10px]" textAnchor="middle" x="211" y="153">10:30</text>
-
-                {/* Cữ 3: 14:30 (Active - Shrimp Orange #EA580C) */}
-                <rect
-                  className="fill-[#EA580C] cursor-pointer"
-                  height="110"
-                  rx="4"
-                  width="34"
-                  x="315"
-                  y="30"
-                  onMouseEnter={() => setSelectedHoverPoint('Cữ 3 (14:30 - Đang rải): 42.5 kg định mức • DO 5.60 mg/L')}
-                  onMouseLeave={() => setSelectedHoverPoint(null)}
-                />
-                <text className="fill-[#EA580C] font-mono-num font-extrabold text-[11px]" textAnchor="middle" x="332" y="22">42.5kg (Đang rải)</text>
-                <text className="fill-[#EA580C] font-mono-num font-bold text-[10px]" textAnchor="middle" x="332" y="153">14:30</text>
-
-                {/* Cữ 4: 18:30 (Planned - Soft Orange #FFDBCA) */}
-                <rect
-                  className="fill-[#FFDBCA] cursor-pointer"
-                  height="78"
-                  rx="4"
-                  stroke="#EA580C"
-                  strokeDasharray="3"
-                  width="32"
-                  x="445"
-                  y="62"
-                  onMouseEnter={() => setSelectedHoverPoint('Cữ 4 (18:30 - Kế hoạch): 35.0 kg • Dự báo DO 5.5 mg/L')}
-                  onMouseLeave={() => setSelectedHoverPoint(null)}
-                />
-                <text className="fill-[#9D4300] font-mono-num font-semibold text-[10px]" textAnchor="middle" x="461" y="54">35kg (Sắp tới)</text>
-                <text className="fill-slate-400 font-mono-num text-[10px]" textAnchor="middle" x="461" y="153">18:30</text>
-
-                {/* DO Dynamic Curve (Bio Green #006E2D) */}
-                <path
-                  d="M 91 58 Q 150 68, 211 48 T 332 64 T 461 46 T 565 60"
-                  fill="none"
-                  stroke="#006E2D"
-                  strokeLinecap="round"
-                  strokeWidth="3"
-                />
-
-                <circle cx="91" cy="58" fill="#ffffff" r="4" stroke="#006E2D" strokeWidth="2.5" />
-                <circle cx="211" cy="48" fill="#ffffff" r="4" stroke="#006E2D" strokeWidth="2.5" />
-                <circle cx="332" cy="64" fill="#EA580C" r="5" stroke="#ffffff" strokeWidth="1.5" />
-                <circle cx="461" cy="46" fill="#ffffff" r="4" stroke="#006E2D" strokeDasharray="1" strokeWidth="2" />
-              </svg>
-            </div>
-          </div>
-
-          <div className="px-4 py-2.5 bg-[#F8F9FF] rounded-xl border border-slate-200/80 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-            <div className="flex items-center gap-2 text-[#0B1C30] font-medium">
-              <span className="w-2 h-2 rounded-full bg-[#006E2D] shrink-0" />
-              <span>
-                {selectedHoverPoint ||
-                  'Hệ thống quạt nước tự động tăng cường khi lượng cám rải vượt 35 kg/giờ/ao.'}
-              </span>
-            </div>
-            <span className="font-bold text-[#006E2D] font-mono-num shrink-0">Oxy đáy duy trì &gt; 5.0 mg/L</span>
-          </div>
+          <button
+            onClick={() => onNavigateTab('logs')}
+            className="text-xs font-bold text-[#006398] hover:underline cursor-pointer"
+          >
+            Xem toàn bộ →
+          </button>
         </div>
 
-        {/* RIGHT 4 COLS: SAFETY RULE & MQTT LOGS */}
-        <div className="xl:col-span-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <Radio className="w-4 h-4 text-[#EA580C]" />
-                <h3 className="text-sm font-bold text-[#0B1C30]">
-                  Nhật ký MQTT & Rule Engine
-                </h3>
-              </div>
-              <button
-                onClick={() => onNavigateTab('logs')}
-                className="text-xs text-[#EA580C] hover:underline font-bold cursor-pointer"
+        {liveAlerts.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {liveAlerts.map((alertItem) => (
+              <div
+                key={alertItem.id}
+                className="p-3.5 rounded-xl border border-amber-200 bg-[#FFF8F5] flex items-start justify-between gap-3 text-xs"
               >
-                Xem tất cả →
-              </button>
-            </div>
-
-            {liveAlerts.length > 0 && (
-              <div className="space-y-2 pb-2 border-b border-slate-100">
-                <div className="text-[11px] font-bold uppercase text-[#BA1A1A] tracking-wider">
-                  Sự cố đang mở ({liveAlerts.length})
-                </div>
-                {liveAlerts.slice(0, 2).map((alertItem) => {
-                  const alertId = alertItem._id || alertItem.id;
-                  return (
-                    <div
-                      key={alertId}
-                      className="p-3 rounded-xl border border-[#FFDAD6] bg-[#FFF8F8] text-xs space-y-2"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="font-bold text-[#93000A]">
-                          {alertItem.title || alertItem.type || 'Cảnh báo thiết bị'}
-                        </span>
-                        <span className="text-[10px] font-mono-num text-[#BA1A1A]">
-                          {alertItem.status || 'OPEN'}
-                        </span>
-                      </div>
-                      <p className="text-slate-600">{alertItem.message || alertItem.description}</p>
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleAcknowledgeAlert(alertId)}
-                          className="px-2 py-1 rounded bg-white border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 cursor-pointer"
-                        >
-                          Tiếp nhận
-                        </button>
-                        <button
-                          onClick={() => handleResolveAlert(alertId)}
-                          className="px-2 py-1 rounded bg-[#006E2D] text-white font-medium hover:bg-[#005320] cursor-pointer"
-                        >
-                          Hoàn tất
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
-              {logs.map((log) => {
-                const isAlert = log.type === 'alert';
-                const isSuccess = log.type === 'success';
-                return (
-                  <div
-                    key={log.id}
-                    className={`p-3 rounded-xl border text-xs transition ${
-                      isAlert
-                        ? 'bg-[#FFF8F5] border-l-4 border-l-[#F59E0B] border-amber-200'
-                        : isSuccess
-                        ? 'bg-[#F0FDF4] border-l-4 border-l-[#006E2D] border-[#7CF994]/60'
-                        : 'bg-[#EFF4FF] border-l-4 border-l-[#006398] border-[#D3E4FE]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <span
-                        className={`font-bold ${
-                          isAlert ? 'text-[#B45309]' : isSuccess ? 'text-[#006E2D]' : 'text-[#006398]'
-                        }`}
-                      >
-                        {log.title}
-                      </span>
-                      <span className="text-[11px] font-mono-num text-slate-400 shrink-0">
-                        {log.timestamp}
-                      </span>
-                    </div>
-                    <p className="text-slate-600 leading-relaxed">{log.message}</p>
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-[#EA580C] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-[#9D4300]">
+                      {alertItem.type?.toUpperCase() || 'CẢNH BÁO'}
+                      {alertItem.pond?.code ? ` • ${alertItem.pond.code}` : ''}
+                    </p>
+                    <p className="text-slate-600 mt-0.5">{alertItem.message}</p>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => handleAcknowledgeAlert(alertItem.id)}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 cursor-pointer"
+                  >
+                    Tiếp nhận
+                  </button>
+                  <button
+                    onClick={() => handleResolveAlert(alertItem.id)}
+                    className="px-2.5 py-1 rounded-lg bg-[#006E2D] text-white font-semibold hover:bg-[#005320] cursor-pointer"
+                  >
+                    Xử lý xong
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Trạng thái rơ-le bảo vệ:</span>
-            <span className="inline-flex items-center gap-1 font-bold text-[#006E2D]">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              3/3 Rơ-le kích hoạt
-            </span>
+        ) : logs.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {logs.slice(0, 4).map((log) => (
+              <div
+                key={log.id}
+                className="p-3.5 rounded-xl border border-slate-200 bg-[#F8F9FF] flex items-start justify-between gap-3 text-xs"
+              >
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-[#006E2D] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-[#0B1C30]">{log.title}</p>
+                    <p className="text-slate-600 mt-0.5">{log.message}</p>
+                  </div>
+                </div>
+                <span className="font-mono-num text-[11px] text-slate-400 shrink-0">
+                  {log.timestamp}
+                </span>
+              </div>
+            ))}
           </div>
-        </div>
+        ) : (
+          <div className="py-6 text-center text-xs text-slate-500">
+            Hiện tại không có cảnh báo vượt ngưỡng nào trong hệ thống.
+          </div>
+        )}
       </div>
     </div>
   );

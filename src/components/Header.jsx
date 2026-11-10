@@ -9,7 +9,8 @@ import {
   User as UserIcon, 
   Shield,
   Bell,
-  Waves
+  Waves,
+  Warehouse
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ChangePasswordModal } from './auth/ChangePasswordModal';
@@ -21,7 +22,12 @@ export const Header = ({
   onEmergencyStop,
   onSync,
   isSyncing,
-  activePondCode = 'AO-02',
+  farms = [],
+  selectedFarmId = 'all',
+  onSelectFarm,
+  ponds = [],
+  activePond = null,
+  onSelectPond,
 }) => {
   const navigate = useNavigate();
   const { user, role, logout } = useAuth();
@@ -39,7 +45,7 @@ export const Header = ({
         const res = await alertService.getSummary().catch(() => null);
         if (res) setAlertSummary(res);
       } catch (err) {
-        console.warn('Lỗi lấy summary cảnh báo:', err);
+        console.warn('Lỗi lấy tổng hợp cảnh báo:', err);
       }
     };
     fetchAlertSummary();
@@ -87,9 +93,11 @@ export const Header = ({
   const displayName = user?.fullName || user?.email || 'Người vận hành';
   const initialChar = displayName.charAt(0).toUpperCase();
 
+  const activePondCount = ponds.filter((p) => p.status === 'active').length;
+
   return (
     <header className="sticky top-0 z-40 h-15 bg-white text-[#0B1C30] border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between select-none shadow-2xs">
-      {/* Left: Mobile-Synced Brand Logo & Farm/Pond Selector Pills */}
+      {/* Left: Brand Logo & Real Farm/Pond Selector Pills */}
       <div className="flex items-center gap-3 md:gap-4">
         <div
           onClick={() => navigate('/')}
@@ -102,37 +110,83 @@ export const Header = ({
             <div className="font-display font-bold text-sm tracking-tight text-[#0B1C30] leading-tight">
               ShrimpMate
             </div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[#EA580C]">
-              Aquaculture OS
+            <div className="text-[10px] font-bold tracking-wider text-[#EA580C]">
+              Hệ điều hành trại tôm
             </div>
           </div>
         </div>
 
         <div className="h-5 w-px bg-slate-200 hidden md:block" />
 
-        {/* Mobile-Synced Ocean Blue Farm & Pond Pill + Bio Green Status Pill */}
+        {/* Bộ chọn Trang trại & Ao nuôi thực tế từ Database */}
         <div className="hidden md:flex items-center gap-2.5 text-xs">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE] font-semibold">
-            <span className="truncate max-w-[200px]">Trại Ba Đầm – Bạc Liêu</span>
-            <span className="text-[#40A2E7]">•</span>
-            <span className="font-mono-num font-bold text-[#0B1C30] bg-white px-2 py-0.5 rounded-md border border-[#D3E4FE]">
-              {activePondCode}
-            </span>
-          </div>
+          {farms.length > 0 ? (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE] font-semibold">
+              <Warehouse className="w-3.5 h-3.5 text-[#006398] shrink-0" />
+              <select
+                value={selectedFarmId}
+                onChange={(e) => onSelectFarm?.(e.target.value)}
+                className="bg-transparent font-bold text-[#006398] focus:outline-none cursor-pointer max-w-[190px] truncate"
+                title="Chọn trang trại hiển thị"
+              >
+                <option value="all">Tất cả trang trại ({farms.length})</option>
+                {farms.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
 
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994] font-semibold">
-            <span className="w-2 h-2 rounded-full bg-[#006E2D]" />
-            <span>Hệ thống ổn định (4/4 Ao)</span>
-          </div>
+              {ponds.length > 0 && (
+                <>
+                  <span className="text-[#40A2E7]">•</span>
+                  <select
+                    value={activePond?.id || ''}
+                    onChange={(e) => onSelectPond?.(e.target.value)}
+                    className="font-mono-num font-bold text-[#0B1C30] bg-white px-2 py-0.5 rounded-md border border-[#D3E4FE] focus:outline-none cursor-pointer"
+                    title="Chọn ao nuôi đang điều khiển"
+                  >
+                    {ponds.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.code} ({p.name})
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => navigate('/ponds')}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-semibold hover:bg-amber-100 transition cursor-pointer"
+            >
+              <Warehouse className="w-3.5 h-3.5 text-amber-600" />
+              <span>Chưa có trang trại • Bấm để khởi tạo</span>
+            </button>
+          )}
+
+          {ponds.length > 0 ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994] font-semibold">
+              <span className="w-2 h-2 rounded-full bg-[#006E2D]" />
+              <span>
+                Đang hoạt động ({activePondCount}/{ponds.length} ao)
+              </span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-slate-400" />
+              <span>0 ao nuôi</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Right: Sync + Notifications + User Profile + Mobile Red E-Stop */}
+      {/* Right: Sync + Notifications + User Profile + E-Stop */}
       <div className="flex items-center gap-2 sm:gap-2.5">
         {/* Sync Button */}
         <button
           onClick={onSync}
-          title="Đồng bộ dữ liệu cảm biến"
+          title="Đồng bộ dữ liệu thực tế từ máy chủ"
           className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0B1C30] border border-slate-200 text-xs font-semibold transition cursor-pointer"
         >
           <RotateCw className={`w-3.5 h-3.5 text-[#006398] ${isSyncing ? 'animate-spin text-[#EA580C]' : ''}`} />
@@ -143,7 +197,7 @@ export const Header = ({
         {/* Alerts Bell */}
         <button
           onClick={() => navigate('/logs')}
-          title="Xem nhật ký & cảnh báo"
+          title="Xem nhật ký và cảnh báo"
           className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-[#F8F9FF] hover:bg-[#FFF8F5] text-[#0B1C30] border border-slate-200 transition cursor-pointer"
         >
           <Bell className="w-4 h-4" />
@@ -218,7 +272,7 @@ export const Header = ({
                     className="w-full px-4 py-2 text-left text-[#0B1C30] hover:bg-[#F8F9FF] flex items-center gap-2.5 transition cursor-pointer font-medium"
                   >
                     <Shield className="w-3.5 h-3.5 text-[#006E2D]" />
-                    <span>Quản trị hệ thống (Admin)</span>
+                    <span>Quản trị hệ thống</span>
                   </button>
                 )}
               </div>
@@ -236,14 +290,15 @@ export const Header = ({
           )}
         </div>
 
-        {/* Emergency Stop Button synced with Mobile #BA1A1A */}
+        {/* Emergency Stop Button */}
         <button
           onClick={onEmergencyStop}
-          className="h-9 px-3.5 rounded-xl bg-[#BA1A1A] hover:bg-[#93000A] active:scale-[0.99] text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer shrink-0"
+          disabled={ponds.length === 0}
+          className="h-9 px-3.5 rounded-xl bg-[#BA1A1A] hover:bg-[#93000A] active:scale-[0.99] text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
           title="Ngắt khẩn cấp toàn bộ máy cho ăn"
         >
           <AlertOctagon className="w-4 h-4" />
-          <span>Dừng khẩn cấp (E-STOP)</span>
+          <span>Dừng khẩn cấp</span>
         </button>
       </div>
 

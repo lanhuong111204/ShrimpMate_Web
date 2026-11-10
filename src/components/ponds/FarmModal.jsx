@@ -28,7 +28,7 @@ export const FarmModal = ({ isOpen, onClose, farm = null, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
-      setErrorMessage('Vui lòng nhập tên trang trại!');
+      setErrorMessage('Vui lòng nhập tên trang trại.');
       return;
     }
 
@@ -36,29 +36,30 @@ export const FarmModal = ({ isOpen, onClose, farm = null, onSuccess }) => {
     setErrorMessage('');
 
     try {
+      let savedFarm;
       if (farm) {
-        await farmService.updateFarm(farm.id, { name, address, status });
+        savedFarm = await farmService.updateFarm(farm.id, { name, address, status });
       } else {
-        await farmService.createFarm({ name, address, status });
+        savedFarm = await farmService.createFarm({ name, address, status });
       }
-      onSuccess?.();
+      onSuccess?.(savedFarm);
       onClose();
     } catch (err) {
-      setErrorMessage(getErrorMessage(err, 'Lưu thông tin trang trại thất bại!'));
+      setErrorMessage(getErrorMessage(err, 'Lưu thông tin trang trại thất bại.'));
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15 animate-fade-in">
+      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
           <div className="flex items-center gap-2.5">
             <Warehouse className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-display font-bold text-sm uppercase tracking-wider">
-              {farm ? 'Cập Nhật Trang Trại' : 'Khai Báo Trang Trại Mới'}
+            <h3 className="font-display font-bold text-sm tracking-wide">
+              {farm ? 'Cập nhật thông tin trang trại' : 'Khai báo trang trại mới'}
             </h3>
           </div>
           <button
@@ -79,43 +80,43 @@ export const FarmModal = ({ isOpen, onClose, farm = null, onSuccess }) => {
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-neutral-700 mb-1.5 uppercase font-mono-num">
-              Tên Trang Trại <span className="text-red-500">*</span>
+            <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
+              Tên trang trại <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="ví dụ: Trang Trại Nuôi Tôm Sông Xanh"
+              placeholder="Ví dụ: Trang trại Sóng Xanh"
               className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-neutral-700 mb-1.5 uppercase font-mono-num">
-              Địa Chỉ / Khu Vực
+            <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
+              Địa chỉ / khu vực
             </label>
             <input
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="ví dụ: Xã Vĩnh Hậu, Huyện Hòa Bình, Tỉnh Bạc Liêu"
+              placeholder="Ví dụ: Xã Vĩnh Hậu, Huyện Hòa Bình, Tỉnh Bạc Liêu"
               className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-neutral-700 mb-1.5 uppercase font-mono-num">
-              Trạng Thái Hoạt Động
+            <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
+              Trạng thái hoạt động
             </label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
               className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 bg-white"
             >
-              <option value="active">Đang hoạt động (Active)</option>
-              <option value="inactive">Tạm ngưng hoạt động (Inactive)</option>
+              <option value="active">Đang hoạt động</option>
+              <option value="inactive">Tạm ngưng hoạt động</option>
             </select>
           </div>
 

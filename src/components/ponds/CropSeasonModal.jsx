@@ -14,8 +14,11 @@ import {
 } from 'lucide-react';
 import { cropSeasonService } from '../../services/cropSeasonService';
 import { getErrorMessage } from '../../services/apiClient';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { useConfirm } from '../../hooks/useConfirm';
 
 export const CropSeasonModal = ({ isOpen, onClose, pond, onSuccess }) => {
+  const { confirm, confirmProps } = useConfirm();
   const [seasons, setSeasons] = useState([]);
   const [activeSeason, setActiveSeason] = useState(null);
   const [statistics, setStatistics] = useState(null);
@@ -115,9 +118,14 @@ export const CropSeasonModal = ({ isOpen, onClose, pond, onSuccess }) => {
   // Thu hoạch & Đóng vụ nuôi
   const handleHarvestSeason = async () => {
     if (!activeSeason) return;
-    if (!window.confirm(`Xác nhận hoàn thành thu hoạch cho [${activeSeason.name}]? Thao tác này sẽ đóng vụ nuôi hiện tại.`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Hoàn thành thu hoạch & Đóng vụ nuôi',
+      message: `Xác nhận hoàn thành thu hoạch cho [${activeSeason.name}]?`,
+      detail: 'Thao tác này sẽ chuyển vụ nuôi hiện tại sang trạng thái Đã thu hoạch (Completed) và chốt số liệu FCR.',
+      confirmText: 'Xác nhận thu hoạch',
+      variant: 'success',
+    });
+    if (!ok) return;
 
     setIsSubmitting(true);
     setErrorMessage('');
@@ -144,8 +152,8 @@ export const CropSeasonModal = ({ isOpen, onClose, pond, onSuccess }) => {
   const fcrInfo = getFcrRating(statistics?.fcr);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl max-w-2xl w-full border border-neutral-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15 animate-fade-in">
+      <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
           <div className="flex items-center gap-2.5">
@@ -425,6 +433,8 @@ export const CropSeasonModal = ({ isOpen, onClose, pond, onSuccess }) => {
           </button>
         </div>
       </div>
+
+      <ConfirmModal {...confirmProps} />
     </div>
   );
 };

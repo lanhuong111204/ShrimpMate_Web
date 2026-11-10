@@ -6,11 +6,13 @@ export const ScadaLogsView = ({ logs, onExport }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredLogs = logs.filter((log) => {
-    if (filterType !== 'all' && log.type !== filterType) return false;
+    if (filterType === 'alert' && log.type !== 'alert') return false;
+    if (filterType === 'info' && log.type === 'alert') return false;
     if (
       searchTerm &&
       !log.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      !log.message.toLowerCase().includes(searchTerm.toLowerCase())
+      !log.message.toLowerCase().includes(searchTerm.toLowerCase()) &&
+      !(log.pondCode || '').toLowerCase().includes(searchTerm.toLowerCase())
     ) {
       return false;
     }
@@ -65,14 +67,14 @@ export const ScadaLogsView = ({ logs, onExport }) => {
               Cảnh báo ({logs.filter((l) => l.type === 'alert').length})
             </button>
             <button
-              onClick={() => setFilterType('success')}
+              onClick={() => setFilterType('info')}
               className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer ${
-                filterType === 'success'
+                filterType === 'info'
                   ? 'bg-[#006E2D] text-white'
                   : 'bg-[#F8F9FF] text-slate-600 hover:bg-slate-100'
               }`}
             >
-              An toàn ({logs.filter((l) => l.type === 'success').length})
+              Thông tin / An toàn ({logs.filter((l) => l.type !== 'alert').length})
             </button>
           </div>
         </div>
@@ -91,41 +93,48 @@ export const ScadaLogsView = ({ logs, onExport }) => {
 
       {/* Logs List */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
-        <div className="divide-y divide-slate-100 text-xs">
-          {filteredLogs.map((log) => {
-            const isAlert = log.type === 'alert';
-            return (
-              <div
-                key={log.id}
-                className={`p-4 flex items-start justify-between gap-4 transition ${
-                  isAlert ? 'bg-[#FFF8F5] hover:bg-[#FFDBCA]/30' : 'hover:bg-[#F8F9FF]'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  {isAlert ? (
-                    <AlertTriangle className="w-4 h-4 text-[#EA580C] mt-0.5 shrink-0" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4 text-[#006E2D] mt-0.5 shrink-0" />
-                  )}
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`font-bold text-sm ${isAlert ? 'text-[#9D4300]' : 'text-[#0B1C30]'}`}>
-                        {log.title}
-                      </span>
-                      {log.pondId && (
-                        <span className="px-2 py-0.5 rounded-full bg-[#EFF4FF] text-[#006398] font-mono-num font-bold text-[11px]">
-                          Ao 0{log.pondId}
+        {filteredLogs.length === 0 ? (
+          <div className="p-10 text-center text-xs text-slate-500">
+            Chưa có bản ghi nhật ký hoặc cảnh báo phù hợp với bộ lọc hiện tại.
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100 text-xs">
+            {filteredLogs.map((log) => {
+              const isAlert = log.type === 'alert';
+              const pondLabel = log.pondCode || log.pondId;
+              return (
+                <div
+                  key={log.id}
+                  className={`p-4 flex items-start justify-between gap-4 transition ${
+                    isAlert ? 'bg-[#FFF8F5] hover:bg-[#FFDBCA]/30' : 'hover:bg-[#F8F9FF]'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {isAlert ? (
+                      <AlertTriangle className="w-4 h-4 text-[#EA580C] mt-0.5 shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-[#006E2D] mt-0.5 shrink-0" />
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`font-bold text-sm ${isAlert ? 'text-[#9D4300]' : 'text-[#0B1C30]'}`}>
+                          {log.title}
                         </span>
-                      )}
+                        {pondLabel && (
+                          <span className="px-2 py-0.5 rounded-full bg-[#EFF4FF] text-[#006398] font-mono-num font-bold text-[11px]">
+                            {pondLabel}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-600 mt-1 leading-relaxed">{log.message}</p>
                     </div>
-                    <p className="text-slate-600 mt-1 leading-relaxed">{log.message}</p>
                   </div>
+                  <span className="text-slate-400 font-mono-num whitespace-nowrap">{log.timestamp}</span>
                 </div>
-                <span className="text-slate-400 font-mono-num whitespace-nowrap">{log.timestamp}</span>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

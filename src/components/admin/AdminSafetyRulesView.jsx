@@ -11,8 +11,11 @@ import {
 } from 'lucide-react';
 import { safetyRuleService } from '../../services/safetyRuleService';
 import { getErrorMessage } from '../../services/apiClient';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { useConfirm } from '../../hooks/useConfirm';
 
 export const AdminSafetyRulesView = () => {
+  const { confirm, confirmProps } = useConfirm();
   const [rules, setRules] = useState([]);
   const [errorMessage, setErrorMessage] = useState('');
   const [successToast, setSuccessToast] = useState('');
@@ -27,6 +30,7 @@ export const AdminSafetyRulesView = () => {
   const [value, setValue] = useState('3.5');
   const [decision, setDecision] = useState('blocked');
   const [reason, setReason] = useState('');
+  const [createError, setCreateError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchRules = async () => {
@@ -46,25 +50,26 @@ export const AdminSafetyRulesView = () => {
 
   const handleToggleRule = async (rule) => {
     const nextEnabled = !rule.isEnabled;
+    setErrorMessage('');
     try {
       await safetyRuleService.updateSafetyRule(rule.id, { isEnabled: nextEnabled });
       setSuccessToast(`Đã ${nextEnabled ? 'kích hoạt' : 'vô hiệu hóa'} luật [${rule.code}].`);
       await fetchRules();
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      alert(getErrorMessage(err, 'Lỗi cập nhật trạng thái luật an toàn!'));
+      setErrorMessage(getErrorMessage(err, 'Lỗi cập nhật trạng thái luật an toàn!'));
     }
   };
 
   const handleCreateRule = async (e) => {
     e.preventDefault();
     if (!code.trim() || !name.trim() || !reason.trim()) {
-      setErrorMessage('Vui lòng điền đầy đủ các thông tin quy tắc an toàn!');
+      setCreateError('Vui lòng điền đầy đủ các thông tin quy tắc an toàn!');
       return;
     }
 
     setIsSubmitting(true);
-    setErrorMessage('');
+    setCreateError('');
 
     try {
       await safetyRuleService.createSafetyRule({
@@ -91,24 +96,32 @@ export const AdminSafetyRulesView = () => {
       await fetchRules();
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      setErrorMessage(getErrorMessage(err, 'Lỗi tạo quy tắc an toàn!'));
+      setCreateError(getErrorMessage(err, 'Lỗi tạo quy tắc an toàn!'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteRule = async (rule) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa luật an toàn [${rule.name}]?`)) {
+    const ok = await confirm({
+      title: 'Xóa quy tắc an toàn nước',
+      message: `Bạn có chắc chắn muốn xóa quy tắc an toàn [${rule.name}]?`,
+      detail: 'Sau khi xóa, Safety Rule Engine sẽ không còn kiểm duyệt theo ngưỡng quy tắc này.',
+      confirmText: 'Xóa quy tắc',
+      variant: 'danger',
+    });
+    if (!ok) {
       return;
     }
 
+    setErrorMessage('');
     try {
       await safetyRuleService.deleteSafetyRule(rule.id);
       setSuccessToast(`Đã xóa luật [${rule.code}].`);
       await fetchRules();
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      alert(getErrorMessage(err, 'Lỗi xóa luật an toàn!'));
+      setErrorMessage(getErrorMessage(err, 'Lỗi xóa luật an toàn!'));
     }
   };
 
@@ -129,7 +142,10 @@ export const AdminSafetyRulesView = () => {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setCreateError('');
+            setIsModalOpen(true);
+          }}
           className="px-4 py-2 bg-gradient-to-r from-[#FB923C] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition cursor-pointer self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
@@ -224,8 +240,8 @@ export const AdminSafetyRulesView = () => {
 
       {/* 3. MODAL THÊM QUY TẮC MỚI */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden">
             <div className="bg-[#0B1C30] px-6 py-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-2.5">
                 <ShieldCheck className="w-5 h-5 text-[#7CF994]" />
@@ -233,12 +249,24 @@ export const AdminSafetyRulesView = () => {
                   Khai báo quy tắc an toàn nước
                 </h3>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+              <button
+                onClick={() => {
+                  setCreateError('');
+                  setIsModalOpen(false);
+                }}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleCreateRule} className="p-6 space-y-4">
+              {createError && (
+                <div className="p-3 bg-[#FFDAD6]/60 border border-[#BA1A1A]/30 text-[#93000A] rounded-xl text-xs font-medium flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-[#BA1A1A] shrink-0 mt-0.5" />
+                  <span>{createError}</span>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-bold text-[#0B1C30] mb-1">
                   Mã quy tắc (Code) <span className="text-[#BA1A1A]">*</span>
@@ -365,6 +393,8 @@ export const AdminSafetyRulesView = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal {...confirmProps} />
     </div>
   );
 };

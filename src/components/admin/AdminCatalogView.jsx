@@ -13,8 +13,11 @@ import {
 } from 'lucide-react';
 import { deviceService } from '../../services/deviceService';
 import { getErrorMessage } from '../../services/apiClient';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { useConfirm } from '../../hooks/useConfirm';
 
 export const AdminCatalogView = () => {
+  const { confirm, confirmProps } = useConfirm();
   const [devices, setDevices] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -27,6 +30,7 @@ export const AdminCatalogView = () => {
   const [name, setName] = useState('');
   const [type, setType] = useState('feeder');
   const [firmwareVersion, setFirmwareVersion] = useState('1.0.0');
+  const [createError, setCreateError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Modal Cập nhật thiết bị
@@ -35,6 +39,7 @@ export const AdminCatalogView = () => {
   const [editName, setEditName] = useState('');
   const [editFirmwareVersion, setEditFirmwareVersion] = useState('');
   const [editStatus, setEditStatus] = useState('offline');
+  const [editError, setEditError] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
 
   const fetchDevices = async () => {
@@ -55,12 +60,12 @@ export const AdminCatalogView = () => {
   const handleCreateDevice = async (e) => {
     e.preventDefault();
     if (!deviceUid.trim() || !name.trim()) {
-      setErrorMessage('Vui lòng nhập mã deviceUid duy nhất và tên thiết bị!');
+      setCreateError('Vui lòng nhập mã deviceUid duy nhất và tên thiết bị!');
       return;
     }
 
     setIsSubmitting(true);
-    setErrorMessage('');
+    setCreateError('');
 
     try {
       await deviceService.createDevice({
@@ -81,7 +86,7 @@ export const AdminCatalogView = () => {
       await fetchDevices();
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      setErrorMessage(getErrorMessage(err, 'Lỗi tạo thiết bị vào Catalog!'));
+      setCreateError(getErrorMessage(err, 'Lỗi tạo thiết bị vào Catalog!'));
     } finally {
       setIsSubmitting(false);
     }
@@ -92,6 +97,7 @@ export const AdminCatalogView = () => {
     setEditName(dev.name || '');
     setEditFirmwareVersion(dev.firmwareVersion || '1.0.0');
     setEditStatus(dev.status || 'offline');
+    setEditError('');
     setIsEditModalOpen(true);
   };
 
@@ -100,7 +106,7 @@ export const AdminCatalogView = () => {
     if (!editingDevice) return;
 
     setIsUpdating(true);
-    setErrorMessage('');
+    setEditError('');
 
     try {
       await deviceService.updateDevice(editingDevice.id, {
@@ -115,24 +121,32 @@ export const AdminCatalogView = () => {
       await fetchDevices();
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      setErrorMessage(getErrorMessage(err, 'Lỗi cập nhật thiết bị!'));
+      setEditError(getErrorMessage(err, 'Lỗi cập nhật thiết bị!'));
     } finally {
       setIsUpdating(false);
     }
   };
 
   const handleDeleteDevice = async (dev) => {
-    if (!window.confirm(`Xóa vĩnh viễn thiết bị [${dev.deviceUid}] khỏi danh mục catalog hệ thống?`)) {
+    const ok = await confirm({
+      title: 'Xóa thiết bị khỏi Catalog',
+      message: `Bạn có chắc chắn muốn xóa vĩnh viễn thiết bị [${dev.deviceUid}] khỏi danh mục hệ thống?`,
+      detail: 'Thao tác này sẽ xóa mã phần cứng chuẩn khỏi kho Catalog.',
+      confirmText: 'Xóa thiết bị',
+      variant: 'danger',
+    });
+    if (!ok) {
       return;
     }
 
+    setErrorMessage('');
     try {
       await deviceService.deleteDevice(dev.id);
       setSuccessToast(`Đã xóa thiết bị [${dev.deviceUid}] khỏi catalog.`);
       await fetchDevices();
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      alert(getErrorMessage(err, 'Lỗi xóa thiết bị!'));
+      setErrorMessage(getErrorMessage(err, 'Lỗi xóa thiết bị!'));
     }
   };
 
@@ -161,7 +175,10 @@ export const AdminCatalogView = () => {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setCreateError('');
+            setIsModalOpen(true);
+          }}
           className="px-4 py-2 bg-gradient-to-r from-[#FB923C] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition cursor-pointer self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
@@ -307,8 +324,8 @@ export const AdminCatalogView = () => {
 
       {/* 4. MODAL KHAI BÁO THIẾT BỊ MỚI */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden font-sans">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden font-sans">
             <div className="bg-[#0B1C30] px-6 py-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-2.5">
                 <Plus className="w-5 h-5 text-[#FB923C]" />
@@ -316,12 +333,24 @@ export const AdminCatalogView = () => {
                   Khai báo thiết bị chuẩn vào kho
                 </h3>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+              <button
+                onClick={() => {
+                  setCreateError('');
+                  setIsModalOpen(false);
+                }}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleCreateDevice} className="p-6 space-y-4">
+              {createError && (
+                <div className="p-3 bg-[#FFDAD6]/60 border border-[#BA1A1A]/30 text-[#93000A] rounded-xl text-xs font-medium flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-[#BA1A1A] shrink-0 mt-0.5" />
+                  <span>{createError}</span>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-bold text-[#0B1C30] mb-1">
                   Mã định danh duy nhất (deviceUid) <span className="text-[#BA1A1A]">*</span>
@@ -409,8 +438,8 @@ export const AdminCatalogView = () => {
 
       {/* 5. MODAL CHỈNH SỬA THIẾT BỊ */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden font-sans">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden font-sans">
             <div className="bg-[#0B1C30] px-6 py-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-2.5">
                 <Edit3 className="w-5 h-5 text-[#FB923C]" />
@@ -418,12 +447,24 @@ export const AdminCatalogView = () => {
                   Cập nhật thiết bị: {editingDevice?.deviceUid}
                 </h3>
               </div>
-              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+              <button
+                onClick={() => {
+                  setEditError('');
+                  setIsEditModalOpen(false);
+                }}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleUpdateDevice} className="p-6 space-y-4">
+              {editError && (
+                <div className="p-3 bg-[#FFDAD6]/60 border border-[#BA1A1A]/30 text-[#93000A] rounded-xl text-xs font-medium flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-[#BA1A1A] shrink-0 mt-0.5" />
+                  <span>{editError}</span>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-bold text-[#0B1C30] mb-1">
                   Tên thiết bị <span className="text-[#BA1A1A]">*</span>
@@ -486,6 +527,8 @@ export const AdminCatalogView = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal {...confirmProps} />
     </div>
   );
 };

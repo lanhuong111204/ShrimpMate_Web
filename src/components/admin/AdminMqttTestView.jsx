@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import adminService from '../../services/adminService';
 import deviceService from '../../services/deviceService';
+import { getErrorMessage } from '../../services/apiClient';
 import { 
   Wifi, 
   WifiOff, 
@@ -23,6 +24,7 @@ export default function AdminMqttTestView() {
   const [spreadRateKgPerMinute, setSpreadRateKgPerMinute] = useState(1.0);
   const [durationSeconds, setDurationSeconds] = useState(30);
   const [sendingCommand, setSendingCommand] = useState(false);
+  const [formError, setFormError] = useState('');
 
   // Command History / Logs
   const [logs, setLogs] = useState([
@@ -55,9 +57,9 @@ export default function AdminMqttTestView() {
       setBrokerStatus(statusData);
       addLog('SUCCESS', `MQTT Broker Status: ${statusData.connected ? 'ONLINE' : 'OFFLINE'}`, statusData);
     } catch (err) {
-      console.error('Lỗi kiểm tra broker:', err);
-      setBrokerStatus({ connected: false, error: err.message });
-      addLog('ERROR', `Không thể truy vấn MQTT Broker: ${err.message}`);
+      const msg = getErrorMessage(err, 'Không thể truy vấn trạng thái MQTT Broker.');
+      setBrokerStatus({ connected: false, error: msg });
+      addLog('ERROR', `Không thể truy vấn MQTT Broker: ${msg}`);
     } finally {
       setLoadingStatus(false);
     }
@@ -73,7 +75,7 @@ export default function AdminMqttTestView() {
         setDeviceUid(feeders[0].deviceUid);
       }
     } catch (err) {
-      console.error('Lỗi tải danh sách feeder:', err);
+      addLog('ERROR', `Không thể tải danh sách máy cho ăn: ${getErrorMessage(err, 'Lỗi tải thiết bị.')}`);
     }
   };
 
@@ -84,8 +86,9 @@ export default function AdminMqttTestView() {
 
   const handleTestFeeder = async (e) => {
     e.preventDefault();
+    setFormError('');
     if (!deviceUid.trim()) {
-      alert('Vui lòng nhập hoặc chọn Device UID của máy cho ăn');
+      setFormError('Vui lòng nhập hoặc chọn Device UID của máy cho ăn.');
       return;
     }
 
@@ -107,7 +110,8 @@ export default function AdminMqttTestView() {
       const resData = res.data || res;
       addLog('SUCCESS', `Máy [${deviceUid.trim()}] đã phản hồi lệnh MQTT thành công!`, resData);
     } catch (err) {
-      const errMsg = err.response?.data?.message || err.message || 'Lỗi gửi lệnh MQTT';
+      const errMsg = getErrorMessage(err, 'Lỗi gửi lệnh MQTT');
+      setFormError(errMsg);
       addLog('ERROR', `Lỗi phát lệnh MQTT tới [${deviceUid.trim()}]: ${errMsg}`);
     } finally {
       setSendingCommand(false);
@@ -159,7 +163,7 @@ export default function AdminMqttTestView() {
             {brokerStatus?.connected ? 'Đang hoạt động' : 'Mất kết nối'}
           </p>
           <p className="text-[11px] text-slate-400 font-mono-num truncate pt-1.5 border-t border-slate-100">
-            URL: {brokerStatus?.brokerUrl || brokerStatus?.host || 'mqtt://broker.emqx.io:1883'}
+            URL: {brokerStatus?.brokerUrl || brokerStatus?.host || 'Chưa có thông tin Broker'}
           </p>
         </div>
 
@@ -186,7 +190,7 @@ export default function AdminMqttTestView() {
             </div>
           </div>
           <p className="text-2xl font-bold font-mono-num text-[#006E2D]">
-            {brokerStatus?.pingMs ? `${brokerStatus.pingMs} ms` : '< 45 ms'}
+            {brokerStatus?.pingMs !== undefined && brokerStatus?.pingMs !== null ? `${brokerStatus.pingMs} ms` : '—'}
           </p>
           <p className="text-[11px] text-slate-400 font-mono-num pt-1.5 border-t border-slate-100">
             QoS Level 1 (At least once delivery)
@@ -214,6 +218,12 @@ export default function AdminMqttTestView() {
             </div>
 
             <form onSubmit={handleTestFeeder} className="space-y-4">
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-medium flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-bold text-[#0B1C30] mb-1.5">
                   Device UID Thiết bị <span className="text-[#BA1A1A]">*</span>

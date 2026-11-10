@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, RotateCw, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, Lock, Eye, EyeOff, RotateCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getErrorMessage } from '../../services/apiClient';
 
@@ -9,6 +9,10 @@ export const ChangePasswordModal = ({ isOpen, onClose, onSuccess }) => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -28,17 +32,17 @@ export const ChangePasswordModal = ({ isOpen, onClose, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!currentPassword || !newPassword) {
-      setErrorMessage('Vui lòng nhập mật khẩu hiện tại và mật khẩu mới!');
+      setErrorMessage('Vui lòng nhập mật khẩu hiện tại và mật khẩu mới.');
       return;
     }
 
-    if (newPassword.length < 6) {
-      setErrorMessage('Mật khẩu mới phải có ít nhất 6 ký tự!');
+    if (newPassword.length < 8) {
+      setErrorMessage('Mật khẩu mới phải có tối thiểu 8 ký tự.');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setErrorMessage('Mật khẩu xác nhận không khớp với mật khẩu mới!');
+      setErrorMessage('Mật khẩu xác nhận không khớp với mật khẩu mới.');
       return;
     }
 
@@ -47,27 +51,27 @@ export const ChangePasswordModal = ({ isOpen, onClose, onSuccess }) => {
 
     try {
       const res = await changePassword(currentPassword, newPassword);
-      setSuccessMessage(res?.message || 'Đổi mật khẩu thành công!');
+      setSuccessMessage(res?.message || 'Đổi mật khẩu thành công.');
       setTimeout(() => {
         if (onSuccess) onSuccess();
         handleClose();
       }, 1500);
     } catch (err) {
-      setErrorMessage(getErrorMessage(err, 'Đổi mật khẩu thất bại. Vui lòng kiểm tra lại mật khẩu hiện tại!'));
+      setErrorMessage(getErrorMessage(err, 'Đổi mật khẩu thất bại. Vui lòng kiểm tra lại mật khẩu hiện tại.'));
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15 animate-fade-in">
+      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
           <div className="flex items-center gap-2.5">
             <Lock className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-display font-bold text-sm uppercase tracking-wider">
-              Đổi Mật Khẩu Tài Khoản
+            <h3 className="font-display font-bold text-sm tracking-wide">
+              Đổi mật khẩu tài khoản
             </h3>
           </div>
           <button
@@ -98,42 +102,69 @@ export const ChangePasswordModal = ({ isOpen, onClose, onSuccess }) => {
             <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
               Mật khẩu hiện tại
             </label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
-              required
-            />
+            <div className="relative">
+              <input
+                type={showCurrentPassword ? 'text' : 'password'}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full pl-3 pr-10 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer"
+              >
+                {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
-              Mật khẩu mới (tối thiểu 6 ký tự)
+              Mật khẩu mới (tối thiểu 8 ký tự)
             </label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
-              required
-            />
+            <div className="relative">
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full pl-3 pr-10 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer"
+              >
+                {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
               Nhập lại mật khẩu mới
             </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
-              required
-            />
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full pl-3 pr-10 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer"
+              >
+                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <div className="pt-2 flex justify-end gap-2">

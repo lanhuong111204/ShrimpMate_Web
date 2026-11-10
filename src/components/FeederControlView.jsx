@@ -7,151 +7,224 @@ import {
   RotateCw, 
   AlertOctagon, 
   ShieldCheck, 
-  Activity, 
-  Radio, 
   Sliders, 
-  Disc, 
-  Check, 
-  Gauge, 
-  RotateCcw, 
-  Package
+  Gauge,
+  RotateCcw,
+  Package,
+  Warehouse,
+  Waves,
+  Cpu,
+  AlertCircle
 } from 'lucide-react';
 import { feedingService } from '../services/feedingService';
 import { safetyRuleService } from '../services/safetyRuleService';
 import { deviceService } from '../services/deviceService';
+import { getErrorMessage } from '../services/apiClient';
 import { SafetyBlockedModal } from './feeder/SafetyBlockedModal';
 
 export const FeederControlView = ({
-  selectedPond,
+  ponds = [],
+  selectedPond = null,
+  onSelectPond,
+  onNavigateTab,
   onEmergencyStop,
   onShowToast,
+  onRefreshData,
   currentTime,
 }) => {
-  // Feeder Machine State
-  const [isRunning, setIsRunning] = useState(true);
+  const feederDevice = selectedPond?.feederDevice || null;
+  const hasFeeder = Boolean(feederDevice);
+
   const [isPaused, setIsPaused] = useState(false);
   const [isReversing, setIsReversing] = useState(false);
   const [isTestSpinning, setIsTestSpinning] = useState(false);
   const [testCountdown, setTestCountdown] = useState(10);
-  const [speedBoost, setSpeedBoost] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [controlError, setControlError] = useState('');
 
-  // Loadcell & Frequency State
-  const [hopperWeight, setHopperWeight] = useState(selectedPond?.hopperKg || 58.0);
-  const maxHopperWeight = selectedPond?.maxHopperKg || 70.0;
-  const [vfdFrequency, setVfdFrequency] = useState(45.0);
-  const [sprayedInCurrentMeal, setSprayedInCurrentMeal] = useState(selectedPond?.sprayedKg || 40.5);
-  const targetCurrentMeal = selectedPond?.targetKg || 45.0;
+  // Số liệu thực tế lấy từ thiết bị Feeder và bản ghi cho ăn trong DB
+  const hopperWeight =
+    feederDevice?.metadata?.hopperKg !== undefined
+      ? Number(feederDevice.metadata.hopperKg)
+      : selectedPond?.hopperKg ?? null;
+  const maxHopperWeight =
+    feederDevice?.metadata?.maxHopperKg !== undefined
+      ? Number(feederDevice.metadata.maxHopperKg)
+      : selectedPond?.maxHopperKg ?? 70.0;
+  const vfdFrequency =
+    feederDevice?.metadata?.vfdFrequencyHz !== undefined
+      ? Number(feederDevice.metadata.vfdFrequencyHz)
+      : selectedPond?.vfdFrequencyHz ?? null;
+  const motorCurrentA =
+    feederDevice?.metadata?.motorCurrentA !== undefined
+      ? Number(feederDevice.metadata.motorCurrentA)
+      : null;
+  const motorTempC =
+    feederDevice?.metadata?.motorTempC !== undefined
+      ? Number(feederDevice.metadata.motorTempC)
+      : null;
 
-  // Pulse mechanism countdown
-  const [restCountdown, setRestCountdown] = useState(14);
-  const [pulseMode, setPulseMode] = useState('resting');
+  const sprayedInCurrentMeal = Number(selectedPond?.sprayedKg ?? 0);
+  const targetCurrentMeal = Number(selectedPond?.targetKg ?? 0);
 
-  // Spectrogram bars animation heights
-  const [waveformBars, setWaveformBars] = useState([
-    20, 35, 45, 60, 85, 95, 78, 90, 100, 82, 68, 75, 92, 96, 70, 55, 40, 62, 80, 98, 85, 72, 50, 38, 25
-  ]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setWaveformBars((prev) =>
-        prev.map((val) => {
-          const delta = (Math.random() - 0.48) * 12;
-          return Math.min(100, Math.max(15, Math.round(val + delta)));
-        })
-      );
-    }, 450);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (!isRunning || isPaused) return;
-
-      setRestCountdown((prev) => {
-        if (prev <= 1) {
-          if (pulseMode === 'resting') {
-            setPulseMode('spraying');
-            return 4;
-          } else {
-            setPulseMode('resting');
-            return 25;
-          }
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [isRunning, isPaused, pulseMode]);
-
-  // Safety Rule Engine Evaluation State
+  // Đánh giá quy tắc an toàn
   const [safetyEvaluation, setSafetyEvaluation] = useState(null);
   const [isSafetyModalOpen, setIsSafetyModalOpen] = useState(false);
 
-  const handleStartAuto = async () => {
+  useEffect(() => {
+    setIsPaused(feederDevice?.mode === 'manual');
+    setControlError('');
+  }, [selectedPond?.id, feederDevice?.id, feederDevice?.mode]);
+
+  if (ponds.length === 0 || !selectedPond) {
+    return (
+      <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center max-w-xl mx-auto space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-[#FFF8F5] text-[#EA580C] flex items-center justify-center mx-auto">
+          <Waves className="w-6 h-6" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-base font-bold text-[#0B1C30]">
+            Chưa có ao nuôi để điều khiển máy cho ăn
+          </h3>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Vui lòng khởi tạo trang trại, khai báo ao nuôi và gán thiết bị máy cho ăn trước khi vận hành.
+          </p>
+        </div>
+        <button
+          onClick={() => onNavigateTab?.('ponds')}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] text-white text-xs font-bold shadow-sm transition cursor-pointer"
+        >
+          <span>Đi tới Quản lý trang trại & ao nuôi</span>
+        </button>
+      </div>
+    );
+  }
+
+  const updateFeederMetadata = async (partialMeta, successMsg) => {
+    if (!feederDevice) {
+      setControlError('Ao này chưa được gán thiết bị máy cho ăn.');
+      return;
+    }
+    setIsSaving(true);
+    setControlError('');
     try {
-      if (selectedPond?.id) {
-        const preview = await safetyRuleService.evaluateSafetyPreview(selectedPond.id, {
-          deviceId: selectedPond.deviceId || selectedPond.id,
-          requestedAmountKg: targetCurrentMeal || 15.0,
-        }).catch(() => null);
+      await deviceService.updateDevice(feederDevice.id, {
+        metadata: {
+          ...(feederDevice.metadata || {}),
+          ...partialMeta,
+        },
+      });
+      await onRefreshData?.();
+      if (successMsg) onShowToast?.(successMsg, 'success');
+    } catch (err) {
+      setControlError(getErrorMessage(err, 'Không thể cập nhật thông số thiết bị lên máy chủ.'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-        if (preview && preview.decision === 'blocked') {
-          setSafetyEvaluation(preview);
-          setIsSafetyModalOpen(true);
-          setIsRunning(false);
-          onShowToast('Cảnh báo: Quy tắc an toàn từ chối lệnh cho ăn do chất lượng nước chưa đạt ngưỡng!', 'alert');
-          return;
-        }
+  const handleStartAuto = async () => {
+    if (!feederDevice) {
+      setControlError('Ao này chưa có thiết bị máy cho ăn được gán.');
+      return;
+    }
 
-        await feedingService.createRecord(selectedPond.id, {
-          deviceId: selectedPond.deviceId || selectedPond.id,
-          requestedAmountKg: targetCurrentMeal || 15.0,
-          source: 'manual',
-        }).catch((err) => {
-          console.warn('Backend cữ ăn offline, tiếp tục mô phỏng:', err);
-        });
+    setControlError('');
+    const requestedKg = targetCurrentMeal > 0 ? Math.min(5.0, targetCurrentMeal) : 3.0;
+    try {
+      const preview = await safetyRuleService
+        .evaluateSafetyPreview(selectedPond.id, {
+          deviceId: feederDevice.id,
+          requestedAmountKg: requestedKg,
+        })
+        .catch(() => null);
+
+      if (preview && preview.decision === 'blocked') {
+        setSafetyEvaluation(preview);
+        setIsSafetyModalOpen(true);
+        setControlError(
+          'Cảnh báo: Quy tắc an toàn từ chối lệnh cho ăn do chất lượng nước chưa đạt ngưỡng.'
+        );
+        return;
       }
 
-      setIsRunning(true);
+      const rec = await feedingService.createRecord(selectedPond.id, {
+        deviceId: feederDevice.id,
+        requestedAmountKg: requestedKg,
+        source: 'manual',
+      });
+
+      if (rec?.id) {
+        await feedingService
+          .updateRecord(rec.id, {
+            status: 'completed',
+            actualAmountKg: requestedKg,
+          })
+          .catch(() => {});
+      }
+
+      if (hopperWeight !== null) {
+        const nextHopper = Math.max(0, parseFloat((hopperWeight - requestedKg).toFixed(1)));
+        await updateFeederMetadata({ hopperKg: nextHopper });
+      } else {
+        await onRefreshData?.();
+      }
+
       setIsPaused(false);
-      onShowToast('Đã kích hoạt chế độ phun cám tự động thành công.', 'success');
+      onShowToast?.(`Đã kích hoạt xả ${requestedKg} kg thức ăn tại ${selectedPond.code}.`, 'success');
     } catch (err) {
-      console.warn(err);
+      setControlError(
+        getErrorMessage(err, 'Không thể thực hiện lệnh xả thức ăn (kiểm tra kết nối hoặc quy tắc an toàn).')
+      );
     }
   };
 
   const handleTriggerEmergencyStop = async () => {
-    if (selectedPond?.deviceId) {
-      await deviceService.emergencyStop(selectedPond.deviceId).catch(() => {});
+    setControlError('');
+    if (feederDevice?.id) {
+      try {
+        await deviceService.emergencyStop(feederDevice.id);
+      } catch (err) {
+        setControlError(getErrorMessage(err, 'Không thể gửi lệnh dừng khẩn cấp lên máy chủ.'));
+      }
     }
     onEmergencyStop?.();
   };
 
-  const handlePause = () => {
-    setIsPaused((prev) => {
-      const next = !prev;
-      onShowToast(
-        next
-          ? 'Đã tạm dừng máy phun 10 phút để kiểm tra nhá ăn.'
-          : 'Đã tiếp tục chu kỳ phun cám.',
+  const handlePause = async () => {
+    if (!feederDevice) return;
+    setControlError('');
+    const nextPaused = !isPaused;
+    setIsPaused(nextPaused);
+    try {
+      await deviceService.updateDevice(feederDevice.id, {
+        mode: nextPaused ? 'manual' : 'automatic',
+      });
+      await onRefreshData?.();
+      onShowToast?.(
+        nextPaused
+          ? 'Đã chuyển máy cho ăn sang chế độ tạm dừng (thủ công).'
+          : 'Đã chuyển máy cho ăn về chế độ tự động.',
         'info'
       );
-      return next;
-    });
+    } catch (err) {
+      setIsPaused(!nextPaused);
+      setControlError(getErrorMessage(err, 'Không thể đổi chế độ hoạt động của thiết bị.'));
+    }
   };
 
   const handleTest10s = () => {
-    if (isTestSpinning) return;
+    if (!feederDevice || isTestSpinning) return;
     setIsTestSpinning(true);
     setTestCountdown(10);
-    onShowToast('Đang bật mâm phun thử 10 giây để kiểm tra bán kính văng.', 'info');
+    onShowToast?.('Đang bật mâm phun thử 10 giây để kiểm tra bán kính văng.', 'info');
 
     const interval = setInterval(() => {
       setTestCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
           setIsTestSpinning(false);
-          onShowToast('Kiểm tra mâm phun 10s hoàn tất, đã trở về chế độ chờ.', 'success');
+          onShowToast?.('Kiểm tra mâm phun 10s hoàn tất.', 'success');
           return 10;
         }
         return prev - 1;
@@ -159,94 +232,164 @@ export const FeederControlView = ({
     }, 1000);
   };
 
-  const handleAdd2Kg = () => {
-    setSprayedInCurrentMeal((prev) => parseFloat((prev + 2.0).toFixed(1)));
-    setHopperWeight((prev) => Math.max(0, parseFloat((prev - 2.0).toFixed(1))));
-    onShowToast('Đã bổ sung +2.0 kg cám vào đợt ăn hiện tại.', 'success');
+  const handleAdd2Kg = async () => {
+    if (!feederDevice) return;
+    setControlError('');
+    try {
+      const rec = await feedingService.createRecord(selectedPond.id, {
+        deviceId: feederDevice.id,
+        requestedAmountKg: 2.0,
+        source: 'manual',
+      });
+      if (rec?.id) {
+        await feedingService.updateRecord(rec.id, { status: 'completed', actualAmountKg: 2.0 }).catch(() => {});
+      }
+      if (hopperWeight !== null) {
+        await updateFeederMetadata(
+          { hopperKg: Math.max(0, parseFloat((hopperWeight - 2.0).toFixed(1))) },
+          'Đã bổ sung +2.0 kg cám vào nhật ký cho ăn thực tế.'
+        );
+      } else {
+        await onRefreshData?.();
+        onShowToast?.('Đã bổ sung +2.0 kg cám vào nhật ký cho ăn thực tế.', 'success');
+      }
+    } catch (err) {
+      setControlError(getErrorMessage(err, 'Không thể thực hiện lệnh phun bù +2.0 kg.'));
+    }
   };
 
   const handleReverseMotor = () => {
-    if (isReversing) return;
+    if (!feederDevice || isReversing) return;
     setIsReversing(true);
-    onShowToast('Đang kích hoạt chu trình đảo chiều mâm 3s để chống kẹt cám.', 'warning');
+    onShowToast?.('Đang kích hoạt đảo chiều mâm 3 giây để chống kẹt cám.', 'info');
     setTimeout(() => {
       setIsReversing(false);
-      onShowToast('Đảo chiều mâm hoàn tất. Mâm phun đã thông thoáng.', 'success');
+      onShowToast?.('Đảo chiều mâm hoàn tất.', 'success');
     }, 3000);
   };
 
-  const handleSetZeroScale = () => {
-    setHopperWeight(0.0);
-    onShowToast('Cảm biến Loadcell đã được đưa về 0.0 kg.', 'info');
+  const handleSetZeroScale = async () => {
+    await updateFeederMetadata(
+      { hopperKg: 0.0, maxHopperKg: maxHopperWeight },
+      'Đã đặt cân điện tử phễu chứa về 0.0 kg trên cơ sở dữ liệu.'
+    );
   };
 
-  const handleRefill50Kg = () => {
-    setHopperWeight(50.0);
-    onShowToast('Đã nạp mới bao cám 50.0 kg vào phễu chứa.', 'success');
+  const handleRefill50Kg = async () => {
+    const nextWeight = Math.min(maxHopperWeight, parseFloat(((hopperWeight || 0) + 50.0).toFixed(1)));
+    await updateFeederMetadata(
+      { hopperKg: nextWeight, maxHopperKg: maxHopperWeight },
+      `Đã nạp cám vào phễu chứa (${nextWeight} / ${maxHopperWeight} kg).`
+    );
   };
 
-  const handleSetPresetFreq = (freq) => {
-    setVfdFrequency(freq);
-    onShowToast(`Đã chuyển tần số biến tần VFD sang ${freq} Hz.`, 'info');
+  const handleSetPresetFreq = async (freq) => {
+    await updateFeederMetadata(
+      { vfdFrequencyHz: freq },
+      `Đã lưu tần số biến tần ${freq.toFixed(1)} Hz cho thiết bị ${feederDevice?.deviceUid}.`
+    );
   };
 
-  // Big Circular Feeder Progress Ring math (r = 78, circumference = 2 * PI * 78 = 490)
-  const feedPct = Math.min(100, Math.round((sprayedInCurrentMeal / (targetCurrentMeal || 1)) * 100));
+  const feedPct =
+    targetCurrentMeal > 0
+      ? Math.min(100, Math.round((sprayedInCurrentMeal / targetCurrentMeal) * 100))
+      : 0;
   const bigCircumference = 490;
   const bigOffset = bigCircumference - (feedPct / 100) * bigCircumference;
-  const hopperPct = Math.min(100, Math.round((hopperWeight / (maxHopperWeight || 1)) * 100));
+  const hopperPct =
+    hopperWeight !== null && maxHopperWeight > 0
+      ? Math.min(100, Math.round((hopperWeight / maxHopperWeight) * 100))
+      : 0;
 
   return (
     <div className="space-y-5">
-      {/* 1. MOBILE SAFETY RULE ENGINE INTERLOCK BANNER */}
-      <div className="rounded-2xl p-4 bg-[#E8F5E9] border border-[#7CF994] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* 1. HEADER CHỌN AO & TRẠNG THÁI AN TOÀN */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-[#006E2D] text-white flex items-center justify-center shrink-0">
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-extrabold uppercase tracking-wider text-[#006E2D]">
-                SAFETY RULE ENGINE: ALLOWED
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#EFF4FF] text-[#006398] text-[11px] font-bold">
+                <Warehouse className="w-3 h-3" />
+                {selectedPond.farmName || 'Trang trại'}
               </span>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white text-[#006E2D] border border-[#7CF994]">
-                Đang kiểm tra thời gian thực
+              <span className="text-xs font-extrabold text-[#006E2D]">
+                Bộ khóa liên động an toàn: Đang kiểm tra thời gian thực
               </span>
             </div>
-            <p className="text-xs text-[#005320] mt-0.5 font-medium">
-              Các chỉ số DO ({selectedPond?.do ? selectedPond.do.toFixed(2) : '5.60'} mg/L), pH ({selectedPond?.ph ? selectedPond.ph.toFixed(1) : '7.9'}) và Nhiệt độ ({selectedPond?.temp ? selectedPond.temp.toFixed(1) : '28.5'}°C) đều nằm trong ngưỡng tối ưu. Cho phép vận hành 100% định mức.
+            <p className="text-xs text-slate-600 mt-0.5">
+              Chỉ số thực tế tại <strong>{selectedPond.code}</strong>: DO ({selectedPond.do !== null ? `${selectedPond.do.toFixed(2)} mg/L` : 'Chưa đo'}), pH ({selectedPond.ph !== null ? selectedPond.ph.toFixed(1) : 'Chưa đo'}), Nhiệt độ ({selectedPond.temp !== null ? `${selectedPond.temp.toFixed(1)}°C` : 'Chưa đo'}).
             </p>
           </div>
         </div>
-        <div className="text-xs font-mono-num font-bold text-[#006E2D] bg-white px-3 py-1.5 rounded-xl border border-[#7CF994] shrink-0">
-          Đồng hồ tủ máy: {currentTime}
+
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-slate-500 font-semibold">Chọn ao điều khiển:</span>
+          <select
+            value={selectedPond.id}
+            onChange={(e) => onSelectPond?.(e.target.value)}
+            className="px-3 py-1.5 rounded-xl bg-[#EFF4FF] border border-[#D3E4FE] font-bold text-[#0B1C30] focus:outline-none cursor-pointer"
+          >
+            {ponds.map((p) => (
+              <option key={p.id} value={p.id}>
+                [{p.farmName}] {p.code} – {p.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {/* 2. TOP SPLIT: BIG CIRCULAR FEEDER GAUGE (LEFT 5 COLS) + TACTICAL CONTROL & VFD (RIGHT 7 COLS) */}
+      {/* CẢNH BÁO NẾU AO CHƯA ĐƯỢC GÁN THIẾT BỊ MÁY CHO ĂN */}
+      {!hasFeeder && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
+          <div className="flex items-center gap-2.5">
+            <Cpu className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <strong>Ao {selectedPond.code} ({selectedPond.name}) chưa được gán thiết bị máy cho ăn.</strong>
+              <p className="text-amber-800 mt-0.5">
+                Các thông số tải trọng phễu và biến tần dưới đây sẽ hiển thị <code>--</code> cho đến khi bạn gán thiết bị máy cho ăn thật vào ao này.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigateTab?.('ponds')}
+            className="px-3.5 py-2 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] text-white font-bold shrink-0 cursor-pointer"
+          >
+            Gán thiết bị ngay
+          </button>
+        </div>
+      )}
+
+      {/* 2. ĐỒNG HỒ TIẾN ĐỘ RẢI CÁM & BẢNG ĐIỀU KHIỂN 6 NÚT */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-        {/* LEFT 5 COLS: BIG CIRCULAR FEEDER PROGRESS GAUGE (Synced with Mobile may-cho-an.tsx) */}
+        {/* CỘT TRÁI 5 COLS: VÒNG TRÒN TIẾN ĐỘ THỨC ĂN THỰC TẾ */}
         <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs flex flex-col justify-between items-center text-center">
           <div className="w-full flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Tiến độ rải thức ăn ({selectedPond?.name || 'Ao Bạt A1'})
+            <span className="text-xs font-bold text-slate-500">
+              Tiến độ thức ăn ({selectedPond.code} – {selectedPond.name})
             </span>
             <span
               className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
-                isPaused
+                !hasFeeder
+                  ? 'bg-slate-100 text-slate-500'
+                  : isPaused
                   ? 'bg-[#FFDBCA] text-[#9D4300]'
                   : 'bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994]'
               }`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-[#EA580C]' : 'bg-[#006E2D]'}`} />
-              {isPaused ? 'TẠM DỪNG' : 'ĐANG RẢI CÁM (AUTO)'}
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  !hasFeeder ? 'bg-slate-400' : isPaused ? 'bg-[#EA580C]' : 'bg-[#006E2D]'
+                }`}
+              />
+              {!hasFeeder ? 'Chưa gán máy' : isPaused ? 'Chế độ thủ công' : 'Chế độ tự động'}
             </span>
           </div>
 
-          {/* Big Circular SVG Ring */}
           <div className="relative w-52 h-52 my-4 flex items-center justify-center">
             <svg className="w-52 h-52 -rotate-90" viewBox="0 0 180 180">
-              {/* Outer status ring */}
               <circle
                 cx="90"
                 cy="90"
@@ -255,9 +398,7 @@ export const FeederControlView = ({
                 strokeWidth="3"
                 fill="none"
               />
-              {/* Background track */}
               <circle cx="90" cy="90" r="78" stroke="#FFDBCA" strokeWidth="12" fill="none" />
-              {/* Active progress arc */}
               <circle
                 cx="90"
                 cy="90"
@@ -275,40 +416,51 @@ export const FeederControlView = ({
               <span className="text-3xl font-extrabold text-[#0B1C30] font-mono-num tracking-tight">
                 {sprayedInCurrentMeal.toFixed(1)} / {targetCurrentMeal.toFixed(1)}
               </span>
-              <span className="text-xs font-semibold text-slate-500 mt-0.5">kg đã rải hôm nay</span>
+              <span className="text-xs font-semibold text-slate-500 mt-0.5">kg đã rải / định mức</span>
               <span className="mt-2 px-3 py-1 rounded-full bg-[#FFDBCA] text-[#9D4300] text-xs font-extrabold font-mono-num">
-                {feedPct}% ĐÃ RẢI
+                {feedPct}% hoàn thành
               </span>
             </div>
           </div>
 
-          {/* 3 Mini Telemetry Cards at bottom of Gauge */}
+          {/* 3 Thẻ thông số thực tế từ metadata thiết bị */}
           <div className="w-full grid grid-cols-3 gap-2.5 pt-4 border-t border-slate-100 text-left">
             <div className="p-3 rounded-xl bg-[#EFF4FF] border border-[#D3E4FE]">
-              <p className="text-[10px] font-bold text-[#006398] uppercase">Bầu chứa (Hopper)</p>
+              <p className="text-[10px] font-bold text-[#006398]">Bầu chứa cám</p>
               <p className="text-base font-extrabold text-[#0B1C30] font-mono-num mt-0.5">
-                {hopperPct}% <span className="text-xs font-normal">({hopperWeight.toFixed(0)}kg)</span>
+                {hopperWeight !== null ? (
+                  <>
+                    {hopperPct}% <span className="text-xs font-normal">({hopperWeight.toFixed(1)}kg)</span>
+                  </>
+                ) : (
+                  '--'
+                )}
               </p>
             </div>
             <div className="p-3 rounded-xl bg-[#FFF8F5] border border-[#FFDBCA]">
-              <p className="text-[10px] font-bold text-[#9D4300] uppercase">Lưu lượng vít tải</p>
+              <p className="text-[10px] font-bold text-[#9D4300]">Số cữ đã rải</p>
               <p className="text-base font-extrabold text-[#EA580C] font-mono-num mt-0.5">
-                450 <span className="text-xs font-normal">g/phút</span>
+                {selectedPond.records?.length || 0} <span className="text-xs font-normal">lần</span>
               </p>
             </div>
             <div className="p-3 rounded-xl bg-[#F0FDF4] border border-[#7CF994]/60">
-              <p className="text-[10px] font-bold text-[#006E2D] uppercase">Bán kính (VFD)</p>
+              <p className="text-[10px] font-bold text-[#006E2D]">Biến tần VFD</p>
               <p className="text-base font-extrabold text-[#006E2D] font-mono-num mt-0.5">
-                {vfdFrequency === 35 ? '6.0m' : vfdFrequency === 50 ? '16.0m' : '12.0m'}{' '}
-                <span className="text-xs font-normal">({vfdFrequency}Hz)</span>
+                {vfdFrequency !== null ? (
+                  <>
+                    {vfdFrequency === 35 ? '6m' : vfdFrequency === 50 ? '16m' : '12m'}{' '}
+                    <span className="text-xs font-normal">({vfdFrequency}Hz)</span>
+                  </>
+                ) : (
+                  '--'
+                )}
               </p>
             </div>
           </div>
         </div>
 
-        {/* RIGHT 7 COLS: TACTICAL 6-BUTTON CONTROL + VFD RADIUS + LOADCELL ACTIONS */}
+        {/* CỘT PHẢI 7 COLS: BẢNG ĐIỀU KHIỂN 6 NÚT + BIẾN TẦN VFD + CÂN LOADCELL */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs flex flex-col justify-between space-y-5">
-          {/* 6 Tactical Buttons */}
           <div className="space-y-3">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -317,28 +469,35 @@ export const FeederControlView = ({
                   Bảng điều khiển máy rải cám thời gian thực
                 </h2>
               </div>
-              <span className="text-xs font-mono-num text-slate-400">
-                ID: FEEDER-{selectedPond?.code || 'A1'}-IOT
+              <span className="text-xs font-mono-num text-slate-500">
+                Thiết bị: <strong>{feederDevice?.deviceUid || 'Chưa gán'}</strong>
               </span>
             </div>
 
+            {controlError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{controlError}</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {/* 1. Bắt đầu rải (START - Bio Green #006E2D) */}
               <button
                 onClick={handleStartAuto}
-                className="h-16 px-3 bg-[#006E2D] hover:bg-[#005320] text-white rounded-xl flex flex-col items-center justify-center transition shadow-xs cursor-pointer"
+                disabled={!hasFeeder || isSaving}
+                className="h-16 px-3 bg-[#006E2D] hover:bg-[#005320] disabled:opacity-45 disabled:cursor-not-allowed text-white rounded-xl flex flex-col items-center justify-center transition shadow-xs cursor-pointer"
               >
                 <div className="flex items-center gap-1.5">
                   <Play className="w-4 h-4 fill-white" />
-                  <span className="font-bold text-xs">Bắt đầu rải (START)</span>
+                  <span className="font-bold text-xs">Bắt đầu rải</span>
                 </div>
-                <span className="text-[11px] text-[#7FFC97] mt-0.5">Chế độ tự động</span>
+                <span className="text-[11px] text-[#7FFC97] mt-0.5">Kiểm tra an toàn & xả cám</span>
               </button>
 
-              {/* 2. Tạm dừng (PAUSE - Amber #FEF3C7/#B45309) */}
               <button
                 onClick={handlePause}
-                className={`h-16 px-3 rounded-xl flex flex-col items-center justify-center border transition cursor-pointer ${
+                disabled={!hasFeeder || isSaving}
+                className={`h-16 px-3 rounded-xl flex flex-col items-center justify-center border transition cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed ${
                   isPaused
                     ? 'bg-[#EA580C] text-white border-[#EA580C]'
                     : 'bg-[#FEF3C7] hover:bg-amber-200/80 text-[#B45309] border-amber-300'
@@ -347,46 +506,44 @@ export const FeederControlView = ({
                 <div className="flex items-center gap-1.5">
                   <Pause className="w-4 h-4" />
                   <span className="font-bold text-xs">
-                    {isPaused ? 'Tiếp tục rải' : 'Tạm dừng (PAUSE)'}
+                    {isPaused ? 'Bật tự động' : 'Tạm dừng'}
                   </span>
                 </div>
                 <span className={`text-[11px] mt-0.5 ${isPaused ? 'text-[#FFDBCA]' : 'text-[#92400E]'}`}>
-                  Thăm nhá (10 phút)
+                  Chuyển chế độ máy
                 </span>
               </button>
 
-              {/* 3. Dừng khẩn cấp (E-STOP - Red #FFDAD6/#BA1A1A) */}
               <button
                 onClick={handleTriggerEmergencyStop}
-                className="h-16 px-3 bg-[#FFDAD6] hover:bg-[#BA1A1A] text-[#BA1A1A] hover:text-white border border-[#BA1A1A]/30 rounded-xl flex flex-col items-center justify-center transition cursor-pointer"
+                disabled={!hasFeeder}
+                className="h-16 px-3 bg-[#FFDAD6] hover:bg-[#BA1A1A] text-[#BA1A1A] hover:text-white border border-[#BA1A1A]/30 rounded-xl flex flex-col items-center justify-center transition cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
               >
                 <div className="flex items-center gap-1.5">
                   <AlertOctagon className="w-4 h-4" />
-                  <span className="font-bold text-xs">Dừng hẳn (STOP)</span>
+                  <span className="font-bold text-xs">Dừng khẩn cấp</span>
                 </div>
                 <span className="text-[11px] opacity-80 mt-0.5">Ngắt rơ-le tức thì</span>
               </button>
 
-              {/* 4. Rải thử 10s (TEST - Ocean Blue #EFF4FF/#006398) */}
               <button
                 onClick={handleTest10s}
-                disabled={isTestSpinning}
-                className="h-16 px-3 bg-[#EFF4FF] hover:bg-[#DCE9FF] text-[#006398] border border-[#D3E4FE] rounded-xl flex flex-col items-center justify-center transition cursor-pointer"
+                disabled={!hasFeeder || isTestSpinning}
+                className="h-16 px-3 bg-[#EFF4FF] hover:bg-[#DCE9FF] text-[#006398] border border-[#D3E4FE] rounded-xl flex flex-col items-center justify-center transition cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
               >
                 <div className="flex items-center gap-1.5">
                   <Timer className={`w-4 h-4 ${isTestSpinning ? 'animate-spin' : ''}`} />
                   <span className="font-bold text-xs">
-                    {isTestSpinning ? `Đang thử (${testCountdown}s)` : 'Rải thử 10s (TEST)'}
+                    {isTestSpinning ? `Đang thử (${testCountdown}s)` : 'Rải thử 10 giây'}
                   </span>
                 </div>
                 <span className="text-[11px] text-[#006398]/80 mt-0.5">Kiểm tra mâm văng</span>
               </button>
 
-              {/* 5. Xả kẹt vít tải */}
               <button
                 onClick={handleReverseMotor}
-                disabled={isReversing}
-                className="h-16 px-3 bg-[#F8F9FF] hover:bg-slate-100 text-[#0B1C30] border border-slate-200 rounded-xl flex flex-col items-center justify-center transition cursor-pointer"
+                disabled={!hasFeeder || isReversing}
+                className="h-16 px-3 bg-[#F8F9FF] hover:bg-slate-100 text-[#0B1C30] border border-slate-200 rounded-xl flex flex-col items-center justify-center transition cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
               >
                 <div className="flex items-center gap-1.5">
                   <RotateCw className={`w-4 h-4 text-slate-600 ${isReversing ? 'animate-spin text-[#EA580C]' : ''}`} />
@@ -394,102 +551,82 @@ export const FeederControlView = ({
                     {isReversing ? 'Đang đảo mâm...' : 'Xả kẹt vít tải'}
                   </span>
                 </div>
-                <span className="text-[11px] text-slate-500 mt-0.5">Đảo chiều mâm 3s</span>
+                <span className="text-[11px] text-slate-500 mt-0.5">Đảo chiều mâm 3 giây</span>
               </button>
 
-              {/* 6. Phun bù +2kg (Shrimp Orange #EA580C) */}
               <button
                 onClick={handleAdd2Kg}
-                className="h-16 px-3 bg-gradient-to-r from-[#FB923C] to-[#EA580C] hover:opacity-95 text-white rounded-xl flex flex-col items-center justify-center transition shadow-xs cursor-pointer"
+                disabled={!hasFeeder || isSaving}
+                className="h-16 px-3 bg-gradient-to-r from-[#FB923C] to-[#EA580C] hover:opacity-95 text-white rounded-xl flex flex-col items-center justify-center transition shadow-xs cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
               >
                 <div className="flex items-center gap-1.5">
                   <PlusSquare className="w-4 h-4" />
                   <span className="font-bold text-xs">Phun bù +2.0 kg</span>
                 </div>
-                <span className="text-[11px] text-[#FFDBCA] mt-0.5">Bổ sung cữ hiện tại</span>
+                <span className="text-[11px] text-[#FFDBCA] mt-0.5">Ghi nhận cữ bổ sung</span>
               </button>
             </div>
           </div>
 
-          {/* VFD Spread Radius Selector (3 Cards synced with Stitch & Mobile) */}
+          {/* Chọn bán kính văng biến tần VFD (lưu vào DB) */}
           <div className="space-y-2.5 pt-2 border-t border-slate-100">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Chọn bán kính văng VFD (Inverter Speed)
+              <span className="text-xs font-bold text-slate-500">
+                Chọn tần số biến tần VFD (bán kính văng cám)
               </span>
               <span className="font-mono-num text-xs font-bold text-[#9D4300] bg-[#FFDBCA] px-2.5 py-0.5 rounded-full">
-                {vfdFrequency.toFixed(1)} Hz
+                {vfdFrequency !== null ? `${vfdFrequency.toFixed(1)} Hz` : 'Chưa có dữ liệu'}
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-2.5">
-              <button
-                onClick={() => handleSetPresetFreq(35.0)}
-                className={`p-3 rounded-xl text-left transition border cursor-pointer ${
-                  vfdFrequency === 35.0
-                    ? 'border-2 border-[#EA580C] bg-[#FFF8F5]'
-                    : 'bg-[#F8F9FF] hover:bg-slate-100 border-slate-200'
-                }`}
-              >
-                <div className={`text-xs font-bold ${vfdFrequency === 35.0 ? 'text-[#9D4300]' : 'text-[#0B1C30]'}`}>
-                  Gần (6m)
-                </div>
-                <div className={`font-mono-num text-[11px] mt-0.5 ${vfdFrequency === 35.0 ? 'text-[#EA580C] font-bold' : 'text-slate-500'}`}>
-                  35.0 Hz • 1200 RPM
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleSetPresetFreq(45.0)}
-                className={`p-3 rounded-xl text-left transition border cursor-pointer ${
-                  vfdFrequency === 45.0
-                    ? 'border-2 border-[#EA580C] bg-[#FFF8F5]'
-                    : 'bg-[#F8F9FF] hover:bg-slate-100 border-slate-200'
-                }`}
-              >
-                <div className={`text-xs font-bold ${vfdFrequency === 45.0 ? 'text-[#9D4300]' : 'text-[#0B1C30]'}`}>
-                  Trung bình (12m)
-                </div>
-                <div className={`font-mono-num text-[11px] mt-0.5 ${vfdFrequency === 45.0 ? 'text-[#EA580C] font-bold' : 'text-slate-500'}`}>
-                  45.0 Hz • 2400 RPM
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleSetPresetFreq(50.0)}
-                className={`p-3 rounded-xl text-left transition border cursor-pointer ${
-                  vfdFrequency === 50.0
-                    ? 'border-2 border-[#EA580C] bg-[#FFF8F5]'
-                    : 'bg-[#F8F9FF] hover:bg-slate-100 border-slate-200'
-                }`}
-              >
-                <div className={`text-xs font-bold ${vfdFrequency === 50.0 ? 'text-[#9D4300]' : 'text-[#0B1C30]'}`}>
-                  Xa (16m)
-                </div>
-                <div className={`font-mono-num text-[11px] mt-0.5 ${vfdFrequency === 50.0 ? 'text-[#EA580C] font-bold' : 'text-slate-500'}`}>
-                  50.0 Hz • 3200 RPM
-                </div>
-              </button>
+              {[
+                { freq: 35.0, label: 'Gần (6m)', rpm: '1200 vòng/phút' },
+                { freq: 45.0, label: 'Trung bình (12m)', rpm: '2400 vòng/phút' },
+                { freq: 50.0, label: 'Xa (16m)', rpm: '3200 vòng/phút' },
+              ].map((item) => (
+                <button
+                  key={item.freq}
+                  onClick={() => handleSetPresetFreq(item.freq)}
+                  disabled={!hasFeeder || isSaving}
+                  className={`p-3 rounded-xl text-left transition border cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed ${
+                    vfdFrequency === item.freq
+                      ? 'border-2 border-[#EA580C] bg-[#FFF8F5]'
+                      : 'bg-[#F8F9FF] hover:bg-slate-100 border-slate-200'
+                  }`}
+                >
+                  <div className={`text-xs font-bold ${vfdFrequency === item.freq ? 'text-[#9D4300]' : 'text-[#0B1C30]'}`}>
+                    {item.label}
+                  </div>
+                  <div className={`font-mono-num text-[11px] mt-0.5 ${vfdFrequency === item.freq ? 'text-[#EA580C] font-bold' : 'text-slate-500'}`}>
+                    {item.freq.toFixed(1)} Hz • {item.rpm}
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Hopper Loadcell Quick Actions */}
+          {/* Cân điện tử Loadcell phễu chứa (lưu vào DB) */}
           <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <div className="text-xs text-slate-600">
-              Cân điện tử Loadcell phễu chứa:{' '}
-              <strong className="text-[#0B1C30] font-mono-num">{hopperWeight.toFixed(1)} / {maxHopperWeight} kg</strong>
+              Cân điện tử phễu chứa thực tế:{' '}
+              <strong className="text-[#0B1C30] font-mono-num">
+                {hopperWeight !== null ? `${hopperWeight.toFixed(1)} / ${maxHopperWeight} kg` : 'Chưa có số đo'}
+              </strong>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleSetZeroScale}
-                className="h-8 px-3 bg-[#F8F9FF] hover:bg-slate-100 border border-slate-200 text-[#0B1C30] rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                disabled={!hasFeeder || isSaving}
+                className="h-8 px-3 bg-[#F8F9FF] hover:bg-slate-100 border border-slate-200 text-[#0B1C30] rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
                 <span>Đặt cân 0.0 kg</span>
               </button>
               <button
                 onClick={handleRefill50Kg}
-                className="h-8 px-3.5 bg-[#0B1C30] hover:bg-[#131B2E] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                disabled={!hasFeeder || isSaving}
+                className="h-8 px-3.5 bg-[#0B1C30] hover:bg-[#131B2E] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
               >
                 <Package className="w-3.5 h-3.5 text-[#FB923C]" />
                 <span>+Nạp bao 50kg</span>
@@ -499,126 +636,113 @@ export const FeederControlView = ({
         </div>
       </div>
 
-      {/* 3. BOTTOM SPLIT: HYDROPHONE ACOUSTIC SPECTRUM + PULSE MECHANISM STATS */}
+      {/* 3. LỊCH SỬ CÁC LẦN CHO ĂN THỰC TẾ & THÔNG SỐ ĐỘNG CƠ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* LEFT 7 COLS: HYDROPHONE ACOUSTIC FEEDING */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between gap-4">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-[#006E2D]" />
-                <h2 className="text-sm font-bold text-[#0B1C30]">
-                  Phân tích âm thanh sức ăn (Hydrophone Bio-Acoustics)
-                </h2>
-              </div>
-              <span className="px-2.5 py-0.5 bg-[#EFF4FF] border border-[#D3E4FE] rounded-full text-xs font-mono-num font-bold text-[#006398]">
-                15kHz - 45kHz
-              </span>
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h2 className="text-sm font-bold text-[#0B1C30]">
+              Nhật ký các lần cho ăn thực tế tại {selectedPond.code}
+            </h2>
+            <span className="text-xs font-mono-num text-slate-500">
+              Tổng cộng: {selectedPond.records?.length || 0} bản ghi
+            </span>
+          </div>
+
+          {!selectedPond.records || selectedPond.records.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-500">
+              Chưa có bản ghi cho ăn nào cho ao này trong cơ sở dữ liệu.
             </div>
-
-            <div className="p-4 bg-[#F8F9FF] rounded-xl border border-slate-200/80">
-              <div className="flex items-center justify-between text-xs text-slate-600 mb-3">
-                <span>Cường độ âm thanh bắt mồi (60 giây gần nhất)</span>
-                <span className="font-bold text-[#0B1C30]">
-                  Tần suất: <span className="text-[#006E2D] font-mono-num">88 xung/giây (Mức 3 - Ăn mạnh)</span>
-                </span>
-              </div>
-
-              <div className="h-24 flex items-end justify-between gap-1 py-1 border-b border-slate-200">
-                {waveformBars.map((bar, i) => (
-                  <div
-                    key={i}
-                    className={`w-full rounded-t-xs transition-all duration-300 ${
-                      bar > 85 ? 'bg-[#EA580C]' : bar > 60 ? 'bg-[#006E2D]' : 'bg-[#40A2E7]'
+          ) : (
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {selectedPond.records.slice(0, 8).map((rec) => (
+                <div
+                  key={rec.id}
+                  className="p-3 rounded-xl bg-[#F8F9FF] border border-slate-200 flex items-center justify-between text-xs"
+                >
+                  <div>
+                    <div className="font-bold text-[#0B1C30]">
+                      Lượng cám: {Number(rec.actualAmountKg ?? rec.requestedAmountKg).toFixed(1)} kg • Nguồn:{' '}
+                      {rec.source === 'schedule' ? 'Lịch tự động' : rec.source === 'ai' ? 'Đề xuất AI' : 'Thủ công'}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-mono-num mt-0.5">
+                      Thời gian:{' '}
+                      {rec.startedAt ? new Date(rec.startedAt).toLocaleString('vi-VN') : '--'}
+                    </div>
+                  </div>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                      rec.status === 'completed'
+                        ? 'bg-[#E8F5E9] text-[#006E2D]'
+                        : 'bg-[#EFF4FF] text-[#006398]'
                     }`}
-                    style={{ height: `${bar}%` }}
-                    title={`Mức cường độ: ${bar}%`}
-                  />
-                ))}
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] font-mono-num text-slate-500 pt-2">
-                <span>-60s</span>
-                <span>-30s</span>
-                <span className="text-[#0B1C30] font-bold">Hiện tại: {currentTime.slice(0, 5)}</span>
-              </div>
+                  >
+                    {rec.status === 'completed' ? 'Hoàn thành' : rec.status}
+                  </span>
+                </div>
+              ))}
             </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
-            <div className="text-xs text-slate-600">
-              <strong className="text-[#006E2D]">Gợi ý AI Hydrophone:</strong>{' '}
-              {speedBoost ? 'Đang áp dụng +10% tốc độ rải cám.' : 'Tôm bắt mồi mạnh, có thể tăng +10% tốc độ rải.'}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => {
-                  setSpeedBoost(true);
-                  onShowToast('Đã kích hoạt tăng +10% tốc độ rải cám cho cữ hiện tại.', 'success');
-                }}
-                className={`h-8 px-3 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                  speedBoost ? 'bg-[#006E2D] text-white' : 'bg-[#EA580C] hover:bg-[#C2410C] text-white'
-                }`}
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>{speedBoost ? 'Đã áp dụng +10%' : 'Áp dụng +10% tốc độ'}</span>
-              </button>
-              <button
-                onClick={() => {
-                  setSpeedBoost(false);
-                  onShowToast('Đã chuyển về tốc độ định mức ban đầu.', 'info');
-                }}
-                className="h-8 px-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer"
-              >
-                Giữ mặc định
-              </button>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* RIGHT 5 COLS: PULSE & HARDWARE TELEMETRY */}
         <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <Gauge className="w-4 h-4 text-[#006398]" />
               <h2 className="text-sm font-bold text-[#0B1C30]">
-                Thông số Xung phun & Động cơ
+                Thông số phần cứng máy cho ăn
               </h2>
             </div>
-            <span className="text-xs font-bold text-[#006E2D] bg-[#E8F5E9] px-2.5 py-0.5 rounded-full">
-              Hoạt động chuẩn
+            <span
+              className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                feederDevice?.status === 'online'
+                  ? 'text-[#006E2D] bg-[#E8F5E9]'
+                  : 'text-slate-600 bg-slate-100'
+              }`}
+            >
+              {feederDevice ? (feederDevice.status === 'online' ? 'Trực tuyến' : 'Ngoại tuyến') : 'Chưa kết nối'}
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-3 my-3 text-xs">
             <div className="p-3.5 bg-[#F8F9FF] rounded-xl border border-slate-200/80">
-              <span className="text-slate-500">Chu kỳ xung rải:</span>
-              <div className="text-sm font-extrabold text-[#0B1C30] mt-1 font-mono-num">4s phun / 25s nghỉ</div>
-              <div className="text-xs mt-1 font-mono-num">
-                {pulseMode === 'spraying' ? (
-                  <span className="text-[#EA580C] font-bold">● Đang phun: {restCountdown}s</span>
-                ) : (
-                  <span className="text-[#006398] font-semibold">Đếm lùi nghỉ: {restCountdown}s</span>
-                )}
+              <span className="text-slate-500">Mã thiết bị:</span>
+              <div className="text-sm font-extrabold text-[#0B1C30] mt-1 font-mono-num">
+                {feederDevice?.deviceUid || '--'}
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                Phiên bản FW: {feederDevice?.firmwareVersion || '--'}
               </div>
             </div>
 
             <div className="p-3.5 bg-[#F8F9FF] rounded-xl border border-slate-200/80">
-              <span className="text-slate-500">Đợt rải trong cữ:</span>
-              <div className="text-sm font-extrabold text-[#0B1C30] mt-1 font-mono-num">Đợt 3 / 4 (5.0 kg)</div>
-              <div className="text-xs text-[#006E2D] font-semibold mt-1">Đã xong đợt 1 & 2</div>
+              <span className="text-slate-500">Chế độ vận hành:</span>
+              <div className="text-sm font-extrabold text-[#0B1C30] mt-1">
+                {feederDevice
+                  ? feederDevice.mode === 'automatic'
+                    ? 'Tự động theo lịch'
+                    : 'Điều khiển tay'
+                  : '--'}
+              </div>
+              <div className="text-xs text-[#006E2D] font-semibold mt-1">
+                Đồng hồ: {currentTime}
+              </div>
             </div>
 
             <div className="p-3.5 bg-[#F8F9FF] rounded-xl border border-slate-200/80">
-              <span className="text-slate-500">Dòng tải & Nhiệt motor:</span>
-              <div className="text-sm font-extrabold text-[#0B1C30] mt-1 font-mono-num">1.42 A • 38.4°C</div>
+              <span className="text-slate-500">Dòng tải & nhiệt motor:</span>
+              <div className="text-sm font-extrabold text-[#0B1C30] mt-1 font-mono-num">
+                {motorCurrentA !== null ? `${motorCurrentA} A` : '--'} •{' '}
+                {motorTempC !== null ? `${motorTempC}°C` : '--'}
+              </div>
               <div className="text-xs text-slate-500 mt-1">Ngưỡng bảo vệ: 2.5A / 65°C</div>
             </div>
 
             <div className="p-3.5 bg-[#F8F9FF] rounded-xl border border-slate-200/80">
-              <span className="text-slate-500">Bộ nhớ lịch tủ máy:</span>
-              <div className="text-sm font-extrabold text-[#006E2D] mt-1">Đã đồng bộ</div>
-              <div className="text-xs text-slate-500 mt-1">Chạy độc lập khi mất mạng</div>
+              <span className="text-slate-500">Số cữ lịch tự động:</span>
+              <div className="text-sm font-extrabold text-[#006E2D] mt-1">
+                {selectedPond.schedules?.length || 0} cữ / ngày
+              </div>
+              <div className="text-xs text-slate-500 mt-1">Lưu trên máy chủ & tủ máy</div>
             </div>
           </div>
         </div>
@@ -632,3 +756,5 @@ export const FeederControlView = ({
     </div>
   );
 };
+
+export default FeederControlView;

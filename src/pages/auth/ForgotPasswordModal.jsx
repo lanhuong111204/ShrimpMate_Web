@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, KeyRound, Lock, ArrowRight, CheckCircle2, RotateCw, AlertCircle } from 'lucide-react';
+import { X, Mail, KeyRound, Lock, Eye, EyeOff, ArrowRight, CheckCircle2, RotateCw, AlertCircle } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { getErrorMessage } from '../../services/apiClient';
 
 export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
-  const [step, setStep] = useState(1); // 1: Gửi yêu cầu, 2: Nhập OTP, 3: Đặt pass mới
+  const [step, setStep] = useState(1); // 1: Gửi yêu cầu, 2: Nhập OTP, 3: Đặt mật khẩu mới
   const [identifier, setIdentifier] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  
+
   // Bộ đếm ngược OTP 5 phút (300 giây)
   const [countdown, setCountdown] = useState(300);
   const [isTimerActive, setIsTimerActive] = useState(false);
@@ -48,7 +50,7 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
   const handleRequestOtp = async (e) => {
     e.preventDefault();
     if (!identifier.trim()) {
-      setErrorMsg('Vui lòng nhập Email hoặc Số điện thoại đăng ký!');
+      setErrorMsg('Vui lòng nhập email hoặc số điện thoại đăng ký.');
       return;
     }
     setIsLoading(true);
@@ -60,7 +62,7 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
       setCountdown(300);
       setIsTimerActive(true);
     } catch (err) {
-      setErrorMsg(getErrorMessage(err, 'Không thể gửi yêu cầu đặt lại mật khẩu!'));
+      setErrorMsg(getErrorMessage(err, 'Không thể gửi yêu cầu đặt lại mật khẩu.'));
     } finally {
       setIsLoading(false);
     }
@@ -77,17 +79,17 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
       setIsTimerActive(true);
       setSuccessMsg('Đã phát hành mã OTP mới thành công.');
     } catch (err) {
-      setErrorMsg(getErrorMessage(err, 'Không thể gửi lại mã OTP!'));
+      setErrorMsg(getErrorMessage(err, 'Không thể gửi lại mã OTP.'));
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Bước 2: Xác thực OTP trước khi cho nhập pass mới
+  // Bước 2: Xác thực OTP trước khi cho nhập mật khẩu mới
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     if (!otp.trim() || otp.length !== 6) {
-      setErrorMsg('Vui lòng nhập đầy đủ mã OTP gồm 6 chữ số!');
+      setErrorMsg('Vui lòng nhập đầy đủ mã OTP gồm 6 chữ số.');
       return;
     }
     setIsLoading(true);
@@ -95,9 +97,9 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       await authService.verifyResetOtp(identifier, otp);
       setStep(3);
-      setSuccessMsg('Mã OTP hợp lệ. Vui lòng thiết lập mật khẩu mới!');
+      setSuccessMsg('Mã OTP hợp lệ. Vui lòng thiết lập mật khẩu mới.');
     } catch (err) {
-      setErrorMsg(getErrorMessage(err, 'Mã OTP không đúng hoặc đã hết hạn!'));
+      setErrorMsg(getErrorMessage(err, 'Mã OTP không đúng hoặc đã hết hạn.'));
     } finally {
       setIsLoading(false);
     }
@@ -106,12 +108,12 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
   // Bước 3: Đặt lại mật khẩu mới
   const handleResetPassword = async (e) => {
     e.preventDefault();
-    if (newPassword.length < 6) {
-      setErrorMsg('Mật khẩu mới phải có tối thiểu 6 ký tự!');
+    if (newPassword.length < 8) {
+      setErrorMsg('Mật khẩu mới phải có tối thiểu 8 ký tự.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      setErrorMsg('Mật khẩu xác nhận không khớp!');
+      setErrorMsg('Mật khẩu xác nhận không khớp.');
       return;
     }
     setIsLoading(true);
@@ -119,11 +121,11 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       const res = await authService.resetPassword(identifier, otp, newPassword);
       if (onSuccess) {
-        onSuccess(res?.message || 'Đặt lại mật khẩu thành công! Vui lòng đăng nhập lại.');
+        onSuccess(res?.message || 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.');
       }
       handleClose();
     } catch (err) {
-      setErrorMsg(getErrorMessage(err, 'Không thể đặt lại mật khẩu!'));
+      setErrorMsg(getErrorMessage(err, 'Không thể đặt lại mật khẩu.'));
     } finally {
       setIsLoading(false);
     }
@@ -136,14 +138,14 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-slate-900/15 animate-fade-in">
+      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 ring-1 ring-slate-900/10 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
           <div className="flex items-center gap-2.5">
             <KeyRound className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-display font-bold text-sm uppercase tracking-wider">
-              Khôi Phục Mật Khẩu
+            <h3 className="font-display font-bold text-sm tracking-wide">
+              Khôi phục mật khẩu
             </h3>
           </div>
           <button
@@ -198,11 +200,11 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
           {step === 1 && (
             <form onSubmit={handleRequestOtp} className="space-y-4">
               <p className="text-xs text-neutral-600">
-                Nhập Email hoặc Số điện thoại bạn đã đăng ký để nhận mã OTP khôi phục bảo mật.
+                Nhập email hoặc số điện thoại bạn đã đăng ký để nhận mã OTP khôi phục bảo mật.
               </p>
               <div>
                 <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
-                  Email hoặc Số điện thoại
+                  Email hoặc số điện thoại
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -210,7 +212,7 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
                     type="text"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="ví dụ: admin@shrimpmate.local hoặc 0901234567"
+                    placeholder="Ví dụ: manager@shrimpmate.local hoặc 0901000002"
                     className="w-full pl-9 pr-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
                     required
                   />
@@ -299,18 +301,25 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
-                  Mật khẩu mới (tối thiểu 6 ký tự)
+                  Mật khẩu mới (tối thiểu 8 ký tự)
                 </label>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
-                    type="password"
+                    type={showNewPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-9 pr-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                    className="w-full pl-9 pr-10 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -321,13 +330,20 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
                 <div className="relative">
                   <Lock className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
-                    type="password"
+                    type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-9 pr-3 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                    className="w-full pl-9 pr-10 py-2 text-xs border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 

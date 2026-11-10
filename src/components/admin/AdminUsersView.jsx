@@ -11,8 +11,11 @@ import {
 import { adminService } from '../../services/adminService';
 import { useAuth } from '../../contexts/AuthContext';
 import { getErrorMessage } from '../../services/apiClient';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { useConfirm } from '../../hooks/useConfirm';
 
 export const AdminUsersView = () => {
+  const { confirm, confirmProps } = useConfirm();
   const { user: currentAdmin } = useAuth();
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,15 +44,25 @@ export const AdminUsersView = () => {
 
   // Khóa / Mở khóa tài khoản
   const handleToggleStatus = async (targetUser) => {
+    setErrorMessage('');
     if (targetUser.id === currentAdmin?.id) {
-      alert('Chính sách bảo mật: Bạn không được phép tự khóa tài khoản của chính mình!');
+      setErrorMessage('Chính sách bảo mật: Bạn không được phép tự khóa tài khoản của chính mình!');
       return;
     }
 
     const nextStatus = !targetUser.isActive;
     const actionLabel = nextStatus ? 'mở khóa' : 'khóa';
 
-    if (!window.confirm(`Xác nhận ${actionLabel} tài khoản [${targetUser.fullName || targetUser.email}]?`)) {
+    const ok = await confirm({
+      title: nextStatus ? 'Mở khóa tài khoản' : 'Khóa tài khoản người dùng',
+      message: `Xác nhận ${actionLabel} tài khoản [${targetUser.fullName || targetUser.email}]?`,
+      detail: nextStatus
+        ? 'Người dùng sẽ có thể đăng nhập lại vào hệ thống.'
+        : 'Người dùng sẽ bị chặn đăng nhập cho tới khi được mở khóa lại.',
+      confirmText: nextStatus ? 'Mở khóa' : 'Khóa tài khoản',
+      variant: nextStatus ? 'success' : 'danger',
+    });
+    if (!ok) {
       return;
     }
 
@@ -59,18 +72,26 @@ export const AdminUsersView = () => {
       await fetchUsers();
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      alert(getErrorMessage(err, 'Không thể cập nhật trạng thái tài khoản!'));
+      setErrorMessage(getErrorMessage(err, 'Không thể cập nhật trạng thái tài khoản!'));
     }
   };
 
   // Phân vai trò (Role)
   const handleChangeRole = async (targetUser, newRole) => {
+    setErrorMessage('');
     if (targetUser.id === currentAdmin?.id) {
-      alert('Chính sách bảo mật: Quản trị viên không được phép tự hạ quyền của chính mình!');
+      setErrorMessage('Chính sách bảo mật: Quản trị viên không được phép tự hạ quyền của chính mình!');
       return;
     }
 
-    if (!window.confirm(`Xác nhận chuyển vai trò của [${targetUser.fullName}] sang [${newRole.toUpperCase()}]?`)) {
+    const ok = await confirm({
+      title: 'Thay đổi vai trò tài khoản',
+      message: `Xác nhận chuyển vai trò của [${targetUser.fullName}] sang [${newRole.toUpperCase()}]?`,
+      detail: 'Quyền truy cập các chức năng và API của tài khoản sẽ thay đổi theo vai trò mới.',
+      confirmText: 'Đổi vai trò',
+      variant: 'warning',
+    });
+    if (!ok) {
       return;
     }
 
@@ -80,7 +101,7 @@ export const AdminUsersView = () => {
       await fetchUsers();
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      alert(getErrorMessage(err, 'Lỗi thay đổi vai trò!'));
+      setErrorMessage(getErrorMessage(err, 'Lỗi thay đổi vai trò!'));
     }
   };
 
@@ -272,6 +293,8 @@ export const AdminUsersView = () => {
           </table>
         </div>
       </div>
+
+      <ConfirmModal {...confirmProps} />
     </div>
   );
 };

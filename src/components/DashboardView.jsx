@@ -17,6 +17,7 @@ import {
   RotateCw
 } from 'lucide-react';
 import { alertService } from '../services/alertService';
+import { getErrorMessage } from '../services/apiClient';
 
 export const DashboardView = ({
   farms = [],
@@ -36,14 +37,16 @@ export const DashboardView = ({
 
   // Cảnh báo thời gian thực từ Backend
   const [liveAlerts, setLiveAlerts] = useState([]);
+  const [alertError, setAlertError] = useState('');
 
   const fetchAlerts = async () => {
     try {
-      const alertsRes = await alertService.getAlerts({ status: 'open', limit: 8 }).catch(() => null);
+      const alertsRes = await alertService.getAlerts({ status: 'open', limit: 8 });
       const list = Array.isArray(alertsRes) ? alertsRes : (alertsRes?.data || []);
       setLiveAlerts(list || []);
+      setAlertError('');
     } catch (err) {
-      console.warn('Lỗi nạp cảnh báo:', err);
+      setAlertError(getErrorMessage(err, 'Không thể tải danh sách cảnh báo từ máy chủ.'));
     }
   };
 
@@ -59,7 +62,7 @@ export const DashboardView = ({
       onShowToast?.('Đã tiếp nhận xử lý sự cố.', 'info');
       await fetchAlerts();
     } catch (err) {
-      console.warn('Lỗi xác nhận cảnh báo:', err);
+      onShowToast?.(getErrorMessage(err, 'Không thể xác nhận tiếp nhận cảnh báo.'), 'alert');
     }
   };
 
@@ -69,7 +72,7 @@ export const DashboardView = ({
       onShowToast?.('Đã đánh dấu giải quyết sự cố hoàn tất.', 'success');
       await fetchAlerts();
     } catch (err) {
-      console.warn('Lỗi đóng cảnh báo:', err);
+      onShowToast?.(getErrorMessage(err, 'Không thể cập nhật hoàn tất xử lý cảnh báo.'), 'alert');
     }
   };
 
@@ -774,6 +777,13 @@ export const DashboardView = ({
             Xem toàn bộ →
           </button>
         </div>
+
+        {alertError && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{alertError}</span>
+          </div>
+        )}
 
         {liveAlerts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

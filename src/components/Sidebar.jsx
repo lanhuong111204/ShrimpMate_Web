@@ -17,8 +17,8 @@ import { useAuth } from '../contexts/AuthContext';
 export const Sidebar = ({
   currentTab,
   onSelectTab,
-  activePondCount = 4,
-  feederReadyCount = 4,
+  activePondCount = 0,
+  feederReadyCount = 0,
 }) => {
   const navigate = useNavigate();
   const { role } = useAuth();

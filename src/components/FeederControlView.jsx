@@ -18,6 +18,7 @@ import {
 import { feedingService } from '../services/feedingService';
 import { safetyRuleService } from '../services/safetyRuleService';
 import { deviceService } from '../services/deviceService';
+import { getErrorMessage } from '../services/apiClient';
 import { SafetyBlockedModal } from './feeder/SafetyBlockedModal';
 
 export const FeederControlView = ({
@@ -111,8 +112,8 @@ export const FeederControlView = ({
       });
       await onRefreshData?.();
       if (successMsg) onShowToast?.(successMsg, 'success');
-    } catch {
-      onShowToast?.('Không thể cập nhật thông số thiết bị lên máy chủ.', 'alert');
+    } catch (err) {
+      onShowToast?.(getErrorMessage(err, 'Không thể cập nhật thông số thiết bị lên máy chủ.'), 'alert');
     } finally {
       setIsSaving(false);
     }
@@ -167,14 +168,21 @@ export const FeederControlView = ({
 
       setIsPaused(false);
       onShowToast?.(`Đã kích hoạt xả ${requestedKg} kg thức ăn tại ${selectedPond.code}.`, 'success');
-    } catch {
-      onShowToast?.('Không thể thực hiện lệnh xả thức ăn (vui lòng kiểm tra kết nối hoặc quy tắc an toàn).', 'alert');
+    } catch (err) {
+      onShowToast?.(
+        getErrorMessage(err, 'Không thể thực hiện lệnh xả thức ăn (kiểm tra kết nối hoặc quy tắc an toàn).'),
+        'alert'
+      );
     }
   };
 
   const handleTriggerEmergencyStop = async () => {
     if (feederDevice?.id) {
-      await deviceService.emergencyStop(feederDevice.id).catch(() => {});
+      try {
+        await deviceService.emergencyStop(feederDevice.id);
+      } catch (err) {
+        onShowToast?.(getErrorMessage(err, 'Không thể gửi lệnh dừng khẩn cấp lên máy chủ.'), 'alert');
+      }
     }
     onEmergencyStop?.();
   };
@@ -194,8 +202,9 @@ export const FeederControlView = ({
           : 'Đã chuyển máy cho ăn về chế độ tự động.',
         'info'
       );
-    } catch {
-      onShowToast?.('Không thể đổi chế độ hoạt động của thiết bị.', 'alert');
+    } catch (err) {
+      setIsPaused(!nextPaused);
+      onShowToast?.(getErrorMessage(err, 'Không thể đổi chế độ hoạt động của thiết bị.'), 'alert');
     }
   };
 
@@ -238,8 +247,8 @@ export const FeederControlView = ({
         await onRefreshData?.();
         onShowToast?.('Đã bổ sung +2.0 kg cám vào nhật ký cho ăn thực tế.', 'success');
       }
-    } catch {
-      onShowToast?.('Không thể thực hiện lệnh phun bù +2.0 kg.', 'alert');
+    } catch (err) {
+      onShowToast?.(getErrorMessage(err, 'Không thể thực hiện lệnh phun bù +2.0 kg.'), 'alert');
     }
   };
 

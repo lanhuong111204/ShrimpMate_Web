@@ -49,10 +49,20 @@ export const getErrorMessage = (error, defaultMessage = 'Đã có lỗi xảy ra
   if (!error) return defaultMessage;
   if (error.response?.data?.message) {
     const msg = error.response.data.message;
-    return Array.isArray(msg) ? msg.join(', ') : msg;
+    const text = Array.isArray(msg) ? msg.join(', ') : String(msg);
+    if (error.response.status === 403 && (text === 'Forbidden resource' || text === 'Forbidden')) {
+      return 'Bạn không có quyền thực hiện thao tác hoặc truy cập tài nguyên này (403 Forbidden).';
+    }
+    return text;
   }
   if (error.response?.data?.error) {
-    return error.response.data.error;
+    if (error.response.status === 403 && error.response.data.error === 'Forbidden') {
+      return 'Bạn không có quyền thực hiện thao tác hoặc truy cập tài nguyên này (403 Forbidden).';
+    }
+    return String(error.response.data.error);
+  }
+  if (error.code === 'ECONNABORTED' || error.message?.toLowerCase().includes('timeout')) {
+    return 'Kết nối máy chủ Backend quá thời gian chờ (Timeout). Vui lòng kiểm tra kết nối mạng hoặc địa chỉ API!';
   }
   if (error.message) {
     if (error.message === 'Network Error') {

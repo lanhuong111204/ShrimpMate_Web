@@ -33,6 +33,7 @@ export const FarmersManagementView = () => {
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
+  const [createError, setCreateError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 1.1 Modal Chỉnh sửa Farmer
@@ -40,6 +41,7 @@ export const FarmersManagementView = () => {
   const [editingFarmer, setEditingFarmer] = useState(null);
   const [editFullName, setEditFullName] = useState('');
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
+  const [editError, setEditError] = useState('');
   const [isUpdatingFarmer, setIsUpdatingFarmer] = useState(false);
 
   // 2. Modal Hiển thị Mật khẩu ban đầu (Chỉ hiện 1 lần duy nhất!)
@@ -51,6 +53,7 @@ export const FarmersManagementView = () => {
   });
 
   // 3. Modal Phân công ao nuôi
+  const [assignmentError, setAssignmentError] = useState('');
   const [assignmentModal, setAssignmentModal] = useState({
     isOpen: false,
     farmer: null,
@@ -86,12 +89,12 @@ export const FarmersManagementView = () => {
   const handleCreateFarmer = async (e) => {
     e.preventDefault();
     if (!fullName.trim() || !phoneNumber.trim()) {
-      setErrorMessage('Vui lòng nhập họ tên và số điện thoại Người nuôi!');
+      setCreateError('Vui lòng nhập họ tên và số điện thoại Người nuôi!');
       return;
     }
 
     setIsSubmitting(true);
-    setErrorMessage('');
+    setCreateError('');
 
     try {
       const res = await farmerService.createFarmer({
@@ -115,7 +118,7 @@ export const FarmersManagementView = () => {
 
       await fetchFarmers();
     } catch (err) {
-      setErrorMessage(getErrorMessage(err, 'Không thể tạo tài khoản Farmer!'));
+      setCreateError(getErrorMessage(err, 'Không thể tạo tài khoản Farmer!'));
     } finally {
       setIsSubmitting(false);
     }
@@ -144,6 +147,7 @@ export const FarmersManagementView = () => {
     setAssignmentModal({ isOpen: true, farmer });
     setSelectedPondIds([]);
     setAssignWholeFarm(false);
+    setAssignmentError('');
     setIsLoadingAssignments(true);
 
     try {
@@ -162,7 +166,7 @@ export const FarmersManagementView = () => {
       const assignRes = await farmerService.getAssignments(farmer.id);
       setCurrentAssignments(Array.isArray(assignRes) ? assignRes : (assignRes?.assignments || []));
     } catch (err) {
-      console.warn('Lỗi tải dữ liệu phân công:', err);
+      setAssignmentError(getErrorMessage(err, 'Không thể tải dữ liệu phân công từ máy chủ.'));
     } finally {
       setIsLoadingAssignments(false);
     }
@@ -172,11 +176,13 @@ export const FarmersManagementView = () => {
   const handleFarmChange = async (farmId) => {
     setSelectedFarmId(farmId);
     setSelectedPondIds([]);
+    setAssignmentError('');
     try {
       const pondsRes = await pondService.getPondsByFarm(farmId);
       setFarmPonds(Array.isArray(pondsRes) ? pondsRes : (pondsRes?.data || []));
     } catch (err) {
       setFarmPonds([]);
+      setAssignmentError(getErrorMessage(err, 'Không thể tải danh sách ao của trang trại này.'));
     }
   };
 
@@ -244,6 +250,7 @@ export const FarmersManagementView = () => {
     setEditingFarmer(farmer);
     setEditFullName(farmer.fullName || '');
     setEditPhoneNumber(farmer.phoneNumber || '');
+    setEditError('');
     setIsEditModalOpen(true);
   };
 
@@ -253,11 +260,12 @@ export const FarmersManagementView = () => {
     if (!editingFarmer) return;
 
     if (!editFullName.trim() || !editPhoneNumber.trim()) {
-      alert('Vui lòng điền đầy đủ họ tên và số điện thoại!');
+      setEditError('Vui lòng điền đầy đủ họ tên và số điện thoại!');
       return;
     }
 
     setIsUpdatingFarmer(true);
+    setEditError('');
     try {
       await farmerService.updateFarmer(editingFarmer.id, {
         fullName: editFullName.trim(),
@@ -269,7 +277,7 @@ export const FarmersManagementView = () => {
       await fetchFarmers();
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
-      alert(getErrorMessage(err, 'Lỗi cập nhật thông tin Người nuôi!'));
+      setEditError(getErrorMessage(err, 'Lỗi cập nhật thông tin Người nuôi!'));
     } finally {
       setIsUpdatingFarmer(false);
     }
@@ -296,7 +304,10 @@ export const FarmersManagementView = () => {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={() => {
+              setCreateError('');
+              setIsCreateModalOpen(true);
+            }}
             className="h-9 px-3.5 bg-[#EA580C] hover:bg-[#C2410C] text-white font-bold text-xs rounded-xl flex items-center gap-2 transition shadow-xs cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
@@ -448,7 +459,7 @@ export const FarmersManagementView = () => {
 
       {/* 3. MODAL TẠO FARMER MỚI */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden">
             <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
               <div className="flex items-center gap-2">
@@ -458,14 +469,23 @@ export const FarmersManagementView = () => {
                 </h3>
               </div>
               <button
-                onClick={() => setIsCreateModalOpen(false)}
-                className="text-neutral-400 hover:text-white"
+                onClick={() => {
+                  setCreateError('');
+                  setIsCreateModalOpen(false);
+                }}
+                className="text-neutral-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleCreateFarmer} className="p-6 space-y-4">
+              {createError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-start gap-2 font-medium">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                  <span>{createError}</span>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-neutral-700 mb-1 font-mono-num uppercase">
                   Họ và Tên Farmer <span className="text-red-500">*</span>
@@ -535,7 +555,7 @@ export const FarmersManagementView = () => {
 
       {/* 4. MODAL HIỂN THỊ MẬT KHẨU BAN ĐẦU (CHỈ 1 LẦN DUY NHẤT) */}
       {initialPasswordModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/80 backdrop-blur-md animate-fade-in">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-neutral-950/80 backdrop-blur-md animate-fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden">
             <div className="bg-emerald-600 px-6 py-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-2">
@@ -590,7 +610,7 @@ export const FarmersManagementView = () => {
 
       {/* 5. MODAL PHÂN CÔNG AO NUÔI (UC021) */}
       {assignmentModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full border border-neutral-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
               <div className="flex items-center gap-2">
@@ -613,6 +633,12 @@ export const FarmersManagementView = () => {
             </div>
 
             <div className="p-6 overflow-y-auto space-y-5">
+              {assignmentError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{assignmentError}</span>
+                </div>
+              )}
               {/* Chọn Trang Trại */}
               <div>
                 <label className="block text-xs font-semibold text-neutral-700 mb-1.5 font-mono-num uppercase">
@@ -764,7 +790,7 @@ export const FarmersManagementView = () => {
 
       {/* 5. MODAL CHỈNH SỬA THÔNG TIN FARMER */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-neutral-950/70 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full border border-neutral-200 shadow-2xl overflow-hidden font-sans">
             <div className="bg-neutral-900 px-6 py-4 flex items-center justify-between text-white border-b border-neutral-800">
               <div className="flex items-center gap-2">
@@ -774,14 +800,23 @@ export const FarmersManagementView = () => {
                 </h3>
               </div>
               <button
-                onClick={() => setIsEditModalOpen(false)}
-                className="text-neutral-400 hover:text-white"
+                onClick={() => {
+                  setEditError('');
+                  setIsEditModalOpen(false);
+                }}
+                className="text-neutral-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleUpdateFarmer} className="p-6 space-y-4">
+              {editError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-start gap-2 font-medium">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                  <span>{editError}</span>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-neutral-700 mb-1 font-mono-num uppercase">
                   Họ và Tên *

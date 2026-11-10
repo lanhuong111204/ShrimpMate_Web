@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Camera, 
-  Sliders, 
-  RotateCw, 
-  CheckCircle2, 
-  Crop, 
-  Activity, 
+import {
+  Camera,
+  Sliders,
+  RotateCw,
+  CheckCircle2,
+  AlertCircle,
+  Crop,
+  Activity,
   Cpu,
   Droplets,
   Warehouse,
@@ -29,6 +30,7 @@ export const CameraFisView = ({
   const [aiRecommendation, setAiRecommendation] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   // Modals
   const [isRoiModalOpen, setIsRoiModalOpen] = useState(false);
@@ -68,34 +70,59 @@ export const CameraFisView = ({
       return;
     }
 
+    setErrorMsg('');
     try {
-      const [fisRes, teleRes, aiRes] = await Promise.all([
-        cameraFisService.getLatestFis(pondId).catch(() => null),
-        telemetryService.getLatestTelemetry(pondId).catch(() => null),
-        cameraFisService.getLatestAiRecommendation(pondId).catch(() => null),
+      const [fisSettled, teleSettled, aiSettled] = await Promise.allSettled([
+        cameraFisService.getLatestFis(pondId),
+        telemetryService.getLatestTelemetry(pondId),
+        cameraFisService.getLatestAiRecommendation(pondId),
       ]);
 
-      if (fisRes && fisRes.hasData) {
-        setLatestFis(fisRes.status);
-        setCameraInfo(fisRes.camera || selectedPond?.cameraDevice || null);
+      const errs = [];
+      const isNotEmpty404 = (reason) => reason?.response?.status === 404;
+
+      if (fisSettled.status === 'fulfilled') {
+        const fisRes = fisSettled.value;
+        if (fisRes && fisRes.hasData) {
+          setLatestFis(fisRes.status);
+          setCameraInfo(fisRes.camera || selectedPond?.cameraDevice || null);
+        } else {
+          setLatestFis(null);
+          setCameraInfo(fisRes?.camera || selectedPond?.cameraDevice || null);
+        }
       } else {
         setLatestFis(null);
-        setCameraInfo(fisRes?.camera || selectedPond?.cameraDevice || null);
+        setCameraInfo(selectedPond?.cameraDevice || null);
+        if (!isNotEmpty404(fisSettled.reason)) {
+          errs.push(`FIS: ${getErrorMessage(fisSettled.reason, 'Không thể tải dữ liệu FIS.')}`);
+        }
       }
 
-      if (teleRes && teleRes.id) {
-        setTelemetry(teleRes);
+      if (teleSettled.status === 'fulfilled') {
+        const teleRes = teleSettled.value;
+        setTelemetry(teleRes && teleRes.id ? teleRes : null);
       } else {
         setTelemetry(null);
+        if (!isNotEmpty404(teleSettled.reason)) {
+          errs.push(`Nước: ${getErrorMessage(teleSettled.reason, 'Không thể tải chỉ số nước.')}`);
+        }
       }
 
-      if (aiRes && aiRes.predictedFeedAmountKg !== undefined) {
-        setAiRecommendation(aiRes);
+      if (aiSettled.status === 'fulfilled') {
+        const aiRes = aiSettled.value;
+        setAiRecommendation(aiRes && aiRes.predictedFeedAmountKg !== undefined ? aiRes : null);
       } else {
         setAiRecommendation(null);
+        if (!isNotEmpty404(aiSettled.reason)) {
+          errs.push(`AI: ${getErrorMessage(aiSettled.reason, 'Không thể tải đề xuất AI.')}`);
+        }
+      }
+
+      if (errs.length > 0) {
+        setErrorMsg(errs[0]);
       }
     } catch (err) {
-      console.warn('Lỗi tải dữ liệu chỉ số nước và camera FIS:', err);
+      setErrorMsg(getErrorMessage(err, 'Lỗi tải dữ liệu chỉ số nước và camera FIS.'));
     }
   }, [pondId, selectedPond?.cameraDevice]);
 
@@ -225,8 +252,7 @@ export const CameraFisView = ({
       setToastMsg(`Đã phân tích khung hình và lưu kết quả FIS mới vào cơ sở dữ liệu cho ao ${selectedPond.code}.`);
       setTimeout(() => setToastMsg(''), 4000);
     } catch (err) {
-      setToastMsg(getErrorMessage(err, 'Không thể phân tích khung hình camera.'));
-      setTimeout(() => setToastMsg(''), 4000);
+      setErrorMsg(getErrorMessage(err, 'Không thể phân tích khung hình camera.'));
     } finally {
       setIsAnalyzing(false);
     }
@@ -363,6 +389,13 @@ export const CameraFisView = ({
           </button>
         </div>
       </div>
+
+      {errorMsg && (
+        <div className="p-3.5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-medium flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
       {toastMsg && (
         <div className="p-3.5 bg-[#E8F5E9] border border-[#7CF994] text-[#006E2D] rounded-xl text-xs font-semibold flex items-center gap-2">
@@ -649,7 +682,7 @@ export const CameraFisView = ({
 
       {/* 5. MODAL CẤU HÌNH ROI */}
       {isRoiModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-xs">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden">
             <div className="px-6 py-4 flex items-center justify-between border-b border-slate-200">
               <div className="flex items-center gap-2">
@@ -725,7 +758,7 @@ export const CameraFisView = ({
 
       {/* 6. MODAL TRỌNG SỐ FIS */}
       {isWeightsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-xs">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden">
             <div className="px-6 py-4 flex items-center justify-between border-b border-slate-200">
               <div className="flex items-center gap-2">

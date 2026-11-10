@@ -15,6 +15,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { farmService } from '../services/farmService';
 import { pondService } from '../services/pondService';
+import { getErrorMessage } from '../services/apiClient';
 import { FarmModal } from './ponds/FarmModal';
 import { PondModal } from './ponds/PondModal';
 import { ClaimDeviceModal } from './ponds/ClaimDeviceModal';
@@ -40,6 +41,7 @@ export const PondsManagementView = ({
   const [apiPonds, setApiPonds] = useState([]);
   const [isLoadingFarms, setIsLoadingFarms] = useState(false);
   const [isLoadingPonds, setIsLoadingPonds] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Modals cho ao nuôi
   const [isPondModalOpen, setIsPondModalOpen] = useState(false);
@@ -54,6 +56,7 @@ export const PondsManagementView = ({
   // 1. Tải danh sách trang trại thật của người dùng
   const fetchFarms = async (preferredFarmId = null) => {
     setIsLoadingFarms(true);
+    setErrorMessage('');
     try {
       const res = await farmService.getFarms();
       const list = Array.isArray(res) ? res : (res?.data || []);
@@ -73,7 +76,7 @@ export const PondsManagementView = ({
         setApiPonds([]);
       }
     } catch (err) {
-      console.warn('Lỗi tải danh sách trang trại:', err);
+      setErrorMessage(getErrorMessage(err, 'Không thể tải danh sách trang trại từ máy chủ.'));
       setFarms([]);
       setSelectedFarm(null);
       setApiPonds([]);
@@ -89,12 +92,13 @@ export const PondsManagementView = ({
       return;
     }
     setIsLoadingPonds(true);
+    setErrorMessage('');
     try {
       const res = await pondService.getPondsByFarm(farmId);
       const list = Array.isArray(res) ? res : (res?.data || []);
       setApiPonds(list);
     } catch (err) {
-      console.warn('Lỗi tải danh sách ao nuôi:', err);
+      setErrorMessage(getErrorMessage(err, 'Không thể tải danh sách ao nuôi từ máy chủ.'));
       setApiPonds([]);
     } finally {
       setIsLoadingPonds(false);
@@ -153,7 +157,9 @@ export const PondsManagementView = ({
       await fetchFarms();
       onRefreshGlobalData?.();
     } catch (err) {
-      alert('Lỗi xóa trang trại: ' + (err?.message || 'Lỗi hệ thống'));
+      const msg = getErrorMessage(err, 'Không thể xóa trang trại.');
+      setErrorMessage(msg);
+      alert('Lỗi xóa trang trại: ' + msg);
     }
   };
 
@@ -174,12 +180,20 @@ export const PondsManagementView = ({
       await fetchPonds(targetFarmId);
       onRefreshGlobalData?.();
     } catch (err) {
-      alert('Không thể xóa ao nuôi: ' + (err?.message || 'Lỗi hệ thống'));
+      const msg = getErrorMessage(err, 'Không thể xóa ao nuôi.');
+      setErrorMessage(msg);
+      alert('Không thể xóa ao nuôi: ' + msg);
     }
   };
 
   return (
     <div className="space-y-6">
+      {errorMessage && (
+        <div className="p-3.5 bg-red-50 border border-red-200 text-red-800 rounded-2xl text-xs font-medium flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
       {/* Banner chế độ thanh tra dành cho Quản trị viên */}
       {role === 'admin' && (
         <div className="p-3.5 bg-[#0B1C30] border border-slate-800 text-slate-200 rounded-2xl flex items-center justify-between text-xs font-sans">

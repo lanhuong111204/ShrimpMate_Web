@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { feedingService } from '../services/feedingService';
 import { safetyRuleService } from '../services/safetyRuleService';
+import { getErrorMessage } from '../services/apiClient';
 
 export const ScheduleView = ({
   ponds = [],
@@ -30,6 +31,7 @@ export const ScheduleView = ({
   const [schedules, setSchedules] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [isSyncingHw, setIsSyncingHw] = useState(false);
 
   // Form thêm cữ ăn mới
@@ -45,19 +47,40 @@ export const ScheduleView = ({
     if (!selectedPond?.id) {
       setSchedules([]);
       setRecords([]);
+      setLoadError('');
       return;
     }
     setLoading(true);
+    setLoadError('');
     try {
-      const [schedData, recData] = await Promise.all([
-        feedingService.getSchedules(selectedPond.id).catch(() => []),
-        feedingService.getRecords(selectedPond.id).catch(() => []),
+      const [schedRes, recRes] = await Promise.allSettled([
+        feedingService.getSchedules(selectedPond.id),
+        feedingService.getRecords(selectedPond.id),
       ]);
-      const sorted = (Array.isArray(schedData) ? schedData : []).sort((a, b) =>
-        String(a.timeOfDay || '').localeCompare(String(b.timeOfDay || '')),
-      );
-      setSchedules(sorted);
-      setRecords(Array.isArray(recData) ? recData : []);
+
+      const errs = [];
+      if (schedRes.status === 'fulfilled') {
+        const schedData = schedRes.value;
+        const sorted = (Array.isArray(schedData) ? schedData : (schedData?.data || [])).sort((a, b) =>
+          String(a.timeOfDay || '').localeCompare(String(b.timeOfDay || '')),
+        );
+        setSchedules(sorted);
+      } else {
+        setSchedules([]);
+        errs.push(getErrorMessage(schedRes.reason, 'Không thể tải danh sách lịch cho ăn.'));
+      }
+
+      if (recRes.status === 'fulfilled') {
+        const recData = recRes.value;
+        setRecords(Array.isArray(recData) ? recData : (recData?.data || []));
+      } else {
+        setRecords([]);
+        errs.push(getErrorMessage(recRes.reason, 'Không thể tải lịch sử cữ ăn.'));
+      }
+
+      if (errs.length > 0) {
+        setLoadError(errs[0]);
+      }
     } finally {
       setLoading(false);
     }
@@ -105,7 +128,7 @@ export const ScheduleView = ({
       );
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(err.message || 'Không thể cập nhật khối lượng cữ ăn.', 'warning');
+      onShowToast?.(getErrorMessage(err, 'Không thể cập nhật khối lượng cữ ăn.'), 'alert');
     }
   };
 
@@ -124,7 +147,7 @@ export const ScheduleView = ({
       );
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(err.message || 'Không thể cập nhật trạng thái cữ ăn.', 'warning');
+      onShowToast?.(getErrorMessage(err, 'Không thể cập nhật trạng thái cữ ăn.'), 'alert');
     }
   };
 
@@ -152,7 +175,7 @@ export const ScheduleView = ({
       await loadPondScheduleData();
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(err.message || 'Không thể tạo lịch cho ăn mới.', 'warning');
+      onShowToast?.(getErrorMessage(err, 'Không thể tạo lịch cho ăn mới.'), 'alert');
     }
   };
 
@@ -177,7 +200,7 @@ export const ScheduleView = ({
       await loadPondScheduleData();
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(err.message || 'Không thể tạo bộ lịch mẫu.', 'warning');
+      onShowToast?.(getErrorMessage(err, 'Không thể tạo bộ lịch mẫu.'), 'alert');
     }
   };
 
@@ -191,7 +214,7 @@ export const ScheduleView = ({
       await loadPondScheduleData();
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(err.message || 'Không thể xóa lịch cho ăn.', 'warning');
+      onShowToast?.(getErrorMessage(err, 'Không thể xóa lịch cho ăn.'), 'alert');
     }
   };
 
@@ -225,7 +248,7 @@ export const ScheduleView = ({
       await loadPondScheduleData();
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(err.message || 'Không thể kích hoạt cữ cho ăn.', 'warning');
+      onShowToast?.(getErrorMessage(err, 'Không thể kích hoạt cữ cho ăn.'), 'alert');
     }
   };
 
@@ -244,7 +267,7 @@ export const ScheduleView = ({
       );
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      onShowToast?.(err.message || 'Không thể cập nhật quy tắc an toàn.', 'warning');
+      onShowToast?.(getErrorMessage(err, 'Không thể cập nhật quy tắc an toàn.'), 'alert');
     }
   };
 
@@ -300,6 +323,13 @@ export const ScheduleView = ({
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs font-medium flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+          <span>{loadError}</span>
+        </div>
+      )}
 
       {/* 1. DAILY FEED SUMMARY KPIs */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4 shadow-2xs">
@@ -628,7 +658,9 @@ export const ScheduleView = ({
 
           {safetyRules.length === 0 ? (
             <div className="text-xs text-slate-500 py-6 text-center">
-              Chưa có quy tắc an toàn nào trong cơ sở dữ liệu.
+              {isAdmin
+                ? 'Chưa có quy tắc an toàn nào trong cơ sở dữ liệu.'
+                : 'Bộ quy tắc an toàn toàn cục do Quản trị viên (Admin) quản lý và tự động bảo vệ tại Backend mỗi khi phát lệnh cho ăn.'}
             </div>
           ) : (
             <div className="space-y-3">

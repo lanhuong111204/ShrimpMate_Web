@@ -307,7 +307,7 @@ export const AdminCatalogView = () => {
 
       {/* 4. MODAL KHAI BÁO THIẾT BỊ MỚI */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-sm">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden font-sans">
             <div className="bg-[#0B1C30] px-6 py-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-2.5">
@@ -409,7 +409,7 @@ export const AdminCatalogView = () => {
 
       {/* 5. MODAL CHỈNH SỬA THIẾT BỊ */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-sm">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-[#0B1C30]/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden font-sans">
             <div className="bg-[#0B1C30] px-6 py-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-2.5">

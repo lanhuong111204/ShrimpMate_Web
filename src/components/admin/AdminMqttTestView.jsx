@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import adminService from '../../services/adminService';
 import deviceService from '../../services/deviceService';
+import { getErrorMessage } from '../../services/apiClient';
 import { 
   Wifi, 
   WifiOff, 
@@ -55,9 +56,9 @@ export default function AdminMqttTestView() {
       setBrokerStatus(statusData);
       addLog('SUCCESS', `MQTT Broker Status: ${statusData.connected ? 'ONLINE' : 'OFFLINE'}`, statusData);
     } catch (err) {
-      console.error('Lỗi kiểm tra broker:', err);
-      setBrokerStatus({ connected: false, error: err.message });
-      addLog('ERROR', `Không thể truy vấn MQTT Broker: ${err.message}`);
+      const msg = getErrorMessage(err, 'Không thể truy vấn trạng thái MQTT Broker.');
+      setBrokerStatus({ connected: false, error: msg });
+      addLog('ERROR', `Không thể truy vấn MQTT Broker: ${msg}`);
     } finally {
       setLoadingStatus(false);
     }
@@ -73,7 +74,7 @@ export default function AdminMqttTestView() {
         setDeviceUid(feeders[0].deviceUid);
       }
     } catch (err) {
-      console.error('Lỗi tải danh sách feeder:', err);
+      addLog('ERROR', `Không thể tải danh sách máy cho ăn: ${getErrorMessage(err, 'Lỗi tải thiết bị.')}`);
     }
   };
 
@@ -107,7 +108,7 @@ export default function AdminMqttTestView() {
       const resData = res.data || res;
       addLog('SUCCESS', `Máy [${deviceUid.trim()}] đã phản hồi lệnh MQTT thành công!`, resData);
     } catch (err) {
-      const errMsg = err.response?.data?.message || err.message || 'Lỗi gửi lệnh MQTT';
+      const errMsg = getErrorMessage(err, 'Lỗi gửi lệnh MQTT');
       addLog('ERROR', `Lỗi phát lệnh MQTT tới [${deviceUid.trim()}]: ${errMsg}`);
     } finally {
       setSendingCommand(false);
@@ -159,7 +160,7 @@ export default function AdminMqttTestView() {
             {brokerStatus?.connected ? 'Đang hoạt động' : 'Mất kết nối'}
           </p>
           <p className="text-[11px] text-slate-400 font-mono-num truncate pt-1.5 border-t border-slate-100">
-            URL: {brokerStatus?.brokerUrl || brokerStatus?.host || 'mqtt://broker.emqx.io:1883'}
+            URL: {brokerStatus?.brokerUrl || brokerStatus?.host || 'Chưa có thông tin Broker'}
           </p>
         </div>
 
@@ -186,7 +187,7 @@ export default function AdminMqttTestView() {
             </div>
           </div>
           <p className="text-2xl font-bold font-mono-num text-[#006E2D]">
-            {brokerStatus?.pingMs ? `${brokerStatus.pingMs} ms` : '< 45 ms'}
+            {brokerStatus?.pingMs !== undefined && brokerStatus?.pingMs !== null ? `${brokerStatus.pingMs} ms` : '—'}
           </p>
           <p className="text-[11px] text-slate-400 font-mono-num pt-1.5 border-t border-slate-100">
             QoS Level 1 (At least once delivery)

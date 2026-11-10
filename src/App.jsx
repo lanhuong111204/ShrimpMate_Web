@@ -19,6 +19,7 @@ import { ScadaLogsView } from './components/ScadaLogsView';
 import { IoTStationView } from './components/IoTStationView';
 import { EStopModal } from './components/EStopModal';
 import { Toast } from './components/Toast';
+import { AlertTriangle, X } from 'lucide-react';
 import { farmService } from './services/farmService';
 import { pondService } from './services/pondService';
 import { telemetryService } from './services/telemetryService';
@@ -28,6 +29,7 @@ import { deviceService } from './services/deviceService';
 import { safetyRuleService } from './services/safetyRuleService';
 import { cameraFisService } from './services/cameraFisService';
 import { alertService } from './services/alertService';
+import { getErrorMessage } from './services/apiClient';
 
 const calculateAgeDays = (stockingDate) => {
   if (!stockingDate) return null;
@@ -40,7 +42,7 @@ const calculateAgeDays = (stockingDate) => {
 const SCADAAppContent = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
 
   const getTabFromPath = (pathname) => {
     switch (pathname) {
@@ -77,6 +79,7 @@ const SCADAAppContent = () => {
   const [safetyRules, setSafetyRules] = useState([]);
   const [logs, setLogs] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [dataError, setDataError] = useState('');
 
   // Trạng thái dừng khẩn cấp E-Stop
   const [isEStopActive, setIsEStopActive] = useState(false);
@@ -105,23 +108,46 @@ const SCADAAppContent = () => {
     setToastType(type);
   }, []);
 
-  // Tải toàn bộ dữ liệu thực tế từ Backend theo tài khoản hiện tại
+  // Tải toàn bộ dữ liệu thực tế từ Backend theo tài khoản và đúng quyền RBAC hiện tại
   const fetchAllRealData = useCallback(async (silent = false) => {
-    if (!user) return;
+    if (!user) return { ok: true };
     if (!silent) setIsLoadingData(true);
+    setDataError('');
 
     try {
-      const [farmsRes, devicesRes, rulesRes, alertsRes] = await Promise.all([
-        farmService.getFarms(1, 50).catch(() => ({ data: [] })),
-        deviceService.getDevices().catch(() => []),
-        safetyRuleService.getSafetyRules().catch(() => []),
-        alertService.getAlerts({ limit: 50 }).catch(() => ({ data: [] })),
+      const canReadDevices = role === 'admin' || role === 'manager';
+      const canReadSafetyRules = role === 'admin';
+
+      const [farmsRes, devicesRes, rulesRes, alertsRes] = await Promise.allSettled([
+        farmService.getFarms(1, 50),
+        canReadDevices ? deviceService.getDevices() : Promise.resolve([]),
+        canReadSafetyRules ? safetyRuleService.getSafetyRules() : Promise.resolve([]),
+        alertService.getAlerts({ limit: 50 }),
       ]);
 
-      const farmList = Array.isArray(farmsRes) ? farmsRes : (farmsRes?.data || []);
-      const deviceList = Array.isArray(devicesRes) ? devicesRes : (devicesRes?.data || []);
-      const ruleList = Array.isArray(rulesRes) ? rulesRes : (rulesRes?.data || []);
-      const alertList = Array.isArray(alertsRes) ? alertsRes : (alertsRes?.data || []);
+      const syncErrors = [];
+      if (farmsRes.status === 'rejected') {
+        syncErrors.push(`Trang trại: ${getErrorMessage(farmsRes.reason, 'Không thể tải danh sách trang trại')}`);
+      }
+      if (devicesRes.status === 'rejected') {
+        syncErrors.push(`Thiết bị: ${getErrorMessage(devicesRes.reason, 'Không thể tải danh sách thiết bị')}`);
+      }
+      if (rulesRes.status === 'rejected') {
+        syncErrors.push(`Quy tắc an toàn: ${getErrorMessage(rulesRes.reason, 'Không thể tải quy tắc an toàn')}`);
+      }
+      if (alertsRes.status === 'rejected') {
+        syncErrors.push(`Cảnh báo: ${getErrorMessage(alertsRes.reason, 'Không thể tải cảnh báo')}`);
+      }
+
+      const farmPayload = farmsRes.status === 'fulfilled' ? farmsRes.value : { data: [] };
+      const devicePayload = devicesRes.status === 'fulfilled' ? devicesRes.value : [];
+      const rulePayload = rulesRes.status === 'fulfilled' ? rulesRes.value : [];
+      const alertPayload = alertsRes.status === 'fulfilled' ? alertsRes.value : { data: [] };
+
+      const farmList = Array.isArray(farmPayload) ? farmPayload : (farmPayload?.data || []);
+      const deviceList = Array.isArray(devicePayload) ? devicePayload : (devicePayload?.data || []);
+      const ruleList = Array.isArray(rulePayload) ? rulePayload : (rulePayload?.data || []);
+      const alertList = Array.isArray(alertPayload) ? alertPayload : (alertPayload?.data || []);
 
       setFarms(farmList);
       setDevices(deviceList);
@@ -145,20 +171,30 @@ const SCADAAppContent = () => {
       if (farmList.length === 0) {
         setAllPonds([]);
         setSelectedPondId(null);
-        return;
+        if (syncErrors.length > 0) {
+          const msg = syncErrors[0];
+          setDataError(msg);
+          return { ok: false, error: msg };
+        }
+        return { ok: true };
       }
 
       // Lấy danh sách ao nuôi của từng trang trại
       const pondsPerFarm = await Promise.all(
         farmList.map(async (farm) => {
-          const res = await pondService.getPondsByFarm(farm.id, 1, 100).catch(() => ({ data: [] }));
-          const list = Array.isArray(res) ? res : (res?.data || []);
-          return list.map((p) => ({
-            ...p,
-            farmId: farm.id,
-            farmName: farm.name,
-            farmAddress: farm.address,
-          }));
+          try {
+            const res = await pondService.getPondsByFarm(farm.id, 1, 100);
+            const list = Array.isArray(res) ? res : (res?.data || []);
+            return list.map((p) => ({
+              ...p,
+              farmId: farm.id,
+              farmName: farm.name,
+              farmAddress: farm.address,
+            }));
+          } catch (err) {
+            syncErrors.push(`Ao nuôi (${farm.name}): ${getErrorMessage(err, 'Không thể tải danh sách ao')}`);
+            return [];
+          }
         })
       );
 
@@ -167,20 +203,26 @@ const SCADAAppContent = () => {
       // Lấy dữ liệu vận hành thực tế (Telemetry, Vụ nuôi, Lịch ăn, Nhật ký cho ăn, Camera FIS) cho từng ao
       const enrichedPonds = await Promise.all(
         rawPonds.map(async (pond) => {
-          const [telemetry, seasonsRes, schedulesRes, recordsRes, fisRes] = await Promise.all([
-            telemetryService.getLatestTelemetry(pond.id).catch(() => null),
-            cropSeasonService.getSeasonsByPond(pond.id).catch(() => []),
-            feedingService.getSchedules(pond.id).catch(() => []),
-            feedingService.getRecords(pond.id).catch(() => []),
-            cameraFisService.getLatestFis(pond.id).catch(() => null),
+          const [teleRes, seasonsRes, schedulesRes, recordsRes, fisRes] = await Promise.allSettled([
+            telemetryService.getLatestTelemetry(pond.id),
+            cropSeasonService.getSeasonsByPond(pond.id),
+            feedingService.getSchedules(pond.id),
+            feedingService.getRecords(pond.id),
+            cameraFisService.getLatestFis(pond.id),
           ]);
 
+          const telemetry = teleRes.status === 'fulfilled' ? teleRes.value : null;
+          const seasonsVal = seasonsRes.status === 'fulfilled' ? seasonsRes.value : [];
+          const schedulesVal = schedulesRes.status === 'fulfilled' ? schedulesRes.value : [];
+          const recordsVal = recordsRes.status === 'fulfilled' ? recordsRes.value : [];
+          const fisVal = fisRes.status === 'fulfilled' ? fisRes.value : null;
+
           const hasTelemetry = Boolean(telemetry && telemetry.id);
-          const seasons = Array.isArray(seasonsRes) ? seasonsRes : (seasonsRes?.data || []);
+          const seasons = Array.isArray(seasonsVal) ? seasonsVal : (seasonsVal?.data || []);
           const activeSeason = seasons.find((s) => s.status === 'active') || seasons[0] || null;
 
-          const schedules = Array.isArray(schedulesRes) ? schedulesRes : (schedulesRes?.data || []);
-          const records = Array.isArray(recordsRes) ? recordsRes : (recordsRes?.data || []);
+          const schedules = Array.isArray(schedulesVal) ? schedulesVal : (schedulesVal?.data || []);
+          const records = Array.isArray(recordsVal) ? recordsVal : (recordsVal?.data || []);
 
           const pondDevices = deviceList.filter((d) => d.pondId === pond.id);
           const feederDevice = pondDevices.find((d) => d.type === 'feeder') || null;
@@ -218,10 +260,10 @@ const SCADAAppContent = () => {
             ? `${nextSchedule.name} (${String(nextSchedule.timeOfDay).slice(0, 5)})`
             : 'Chưa thiết lập lịch';
 
-          const fisLevel = fisRes?.hasData ? fisRes.status?.appetiteLevel : null;
-          const fisScore = fisRes?.hasData ? Number(fisRes.status?.fisScore) : null;
-          const fisLabel = fisRes?.hasData
-            ? fisRes.status?.appetiteLevelDescription || `Mức ${fisLevel}`
+          const fisLevel = fisVal?.hasData ? fisVal.status?.appetiteLevel : null;
+          const fisScore = fisVal?.hasData ? Number(fisVal.status?.fisScore) : null;
+          const fisLabel = fisVal?.hasData
+            ? fisVal.status?.appetiteLevelDescription || `Mức ${fisLevel}`
             : 'Chưa có dữ liệu';
 
           // Xác định trạng thái vận hành thực tế của ao
@@ -280,12 +322,21 @@ const SCADAAppContent = () => {
         if (prev && enrichedPonds.some((p) => p.id === prev)) return prev;
         return enrichedPonds[0]?.id || null;
       });
+
+      if (syncErrors.length > 0) {
+        const msg = syncErrors[0];
+        setDataError(msg);
+        return { ok: false, error: msg };
+      }
+      return { ok: true };
     } catch (err) {
-      console.warn('Lỗi đồng bộ dữ liệu từ máy chủ:', err);
+      const msg = getErrorMessage(err, 'Không thể đồng bộ dữ liệu từ máy chủ Backend.');
+      setDataError(msg);
+      return { ok: false, error: msg };
     } finally {
       if (!silent) setIsLoadingData(false);
     }
-  }, [user]);
+  }, [user, role]);
 
   useEffect(() => {
     fetchAllRealData(false);
@@ -313,10 +364,10 @@ const SCADAAppContent = () => {
     setIsEStopActive(true);
     try {
       if (activePond?.deviceId) {
-        await deviceService.emergencyStop(activePond.deviceId).catch(() => {});
+        await deviceService.emergencyStop(activePond.deviceId);
       }
     } catch (err) {
-      console.warn('Lỗi gửi lệnh dừng khẩn cấp:', err);
+      showToast(getErrorMessage(err, 'Không thể gửi lệnh dừng khẩn cấp lên máy chủ Backend!'), 'alert');
     }
     const newLog = {
       id: Date.now().toString(),
@@ -339,12 +390,16 @@ const SCADAAppContent = () => {
   const handleManualSync = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
-    await fetchAllRealData(true);
+    const result = await fetchAllRealData(true);
     setIsSyncing(false);
-    showToast(
-      `Đã đồng bộ dữ liệu thực tế: ${farms.length} trang trại, ${allPonds.length} ao nuôi.`,
-      'success'
-    );
+    if (result?.ok) {
+      showToast(
+        `Đã đồng bộ dữ liệu thực tế: ${farms.length} trang trại, ${allPonds.length} ao nuôi.`,
+        'success'
+      );
+    } else if (result?.error) {
+      showToast(result.error, 'alert');
+    }
   };
 
   // Nạp thêm cám vào phễu của thiết bị Feeder thực tế
@@ -374,8 +429,8 @@ const SCADAAppContent = () => {
       });
       await fetchAllRealData(true);
       showToast(`Đã cập nhật lượng cám trong phễu ${targetPond.code}: ${nextHopper} / ${maxHopper} kg.`, 'success');
-    } catch {
-      showToast('Không thể cập nhật số liệu phễu chứa lên máy chủ.', 'alert');
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Không thể cập nhật số liệu phễu chứa lên máy chủ.'), 'alert');
     }
   };
 
@@ -391,8 +446,8 @@ const SCADAAppContent = () => {
         `${target.code}: Đã chuyển sang trạng thái ${nextStatus === 'active' ? 'Đang hoạt động' : 'Tạm dừng / bảo dưỡng'}.`,
         'info'
       );
-    } catch {
-      showToast('Không thể cập nhật trạng thái ao nuôi.', 'alert');
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Không thể cập nhật trạng thái ao nuôi.'), 'alert');
     }
   };
 
@@ -412,8 +467,11 @@ const SCADAAppContent = () => {
       });
       await fetchAllRealData(true);
       showToast(`[${target.code}]: Đã gửi lệnh chạy thử mâm phun (0.5 kg) xuống máy cho ăn.`, 'success');
-    } catch {
-      showToast(`[${target.code}]: Không thể kích hoạt lệnh chạy thử (kiểm tra quy tắc an toàn hoặc thiết bị).`, 'alert');
+    } catch (err) {
+      showToast(
+        `[${target.code}]: ${getErrorMessage(err, 'Không thể kích hoạt lệnh chạy thử (kiểm tra quy tắc an toàn hoặc thiết bị).')}`,
+        'alert'
+      );
     }
   };
 
@@ -460,6 +518,21 @@ const SCADAAppContent = () => {
         />
 
         <main className="flex-1 p-3 sm:p-5 lg:p-6 overflow-x-hidden">
+          {dataError && (
+            <div className="mb-4 p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs font-medium flex items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{dataError}</span>
+              </div>
+              <button
+                onClick={() => setDataError('')}
+                className="text-red-500 hover:text-red-800 cursor-pointer shrink-0"
+                title="Đóng thông báo"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <Routes>
             <Route
               path="/"
@@ -571,6 +644,28 @@ const SCADAAppContent = () => {
                 <ScadaLogsView
                   logs={logs}
                   onExport={() => {
+                    const escapeCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+                    const csvContent = [
+                      'Thời gian,Mã ao,Sự kiện,Nội dung,Loại',
+                      ...logs.map((l) =>
+                        [
+                          escapeCsv(l.timestamp),
+                          escapeCsv(l.pondCode || 'TRẠM'),
+                          escapeCsv(l.title),
+                          escapeCsv(l.message),
+                          escapeCsv(l.type),
+                        ].join(',')
+                      ),
+                    ].join('\n');
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.setAttribute('download', `shrimpmate_nhat_ky_${new Date().toISOString().slice(0, 10)}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
                     showToast('Đã xuất toàn bộ nhật ký vận hành ra tệp CSV.', 'success');
                   }}
                 />

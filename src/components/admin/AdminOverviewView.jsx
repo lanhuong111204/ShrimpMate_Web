@@ -22,15 +22,21 @@ export const AdminOverviewView = () => {
     setIsLoading(true);
     setErrorMessage('');
     try {
-      const [ov, op, fcr] = await Promise.all([
-        adminService.getOverview().catch(() => null),
-        adminService.getOperationalReport().catch(() => null),
-        adminService.getFcrReport().catch(() => null),
+      const results = await Promise.allSettled([
+        adminService.getOverview(),
+        adminService.getOperationalReport(),
+        adminService.getFcrReport(),
       ]);
 
-      if (ov) setOverview(ov);
-      if (op) setOperational(op);
-      if (fcr) setFcrReport(fcr);
+      const [ovRes, opRes, fcrRes] = results;
+      if (ovRes.status === 'fulfilled') setOverview(ovRes.value);
+      if (opRes.status === 'fulfilled') setOperational(opRes.value);
+      if (fcrRes.status === 'fulfilled') setFcrReport(fcrRes.value);
+
+      const firstErr = results.find((r) => r.status === 'rejected');
+      if (firstErr) {
+        setErrorMessage(getErrorMessage(firstErr.reason, 'Một số số liệu quản trị chưa thể tải từ máy chủ.'));
+      }
     } catch (err) {
       setErrorMessage(getErrorMessage(err, 'Lỗi nạp dữ liệu quản trị nền tảng!'));
     } finally {
@@ -88,11 +94,11 @@ export const AdminOverviewView = () => {
             </div>
           </div>
           <div className="text-3xl font-bold font-mono-num text-[#0B1C30]">
-            {overview?.users?.total ?? 50}
+            {overview?.users?.total ?? '—'}
           </div>
           <div className="flex items-center justify-between pt-2 text-[11px] font-mono-num border-t border-slate-100 text-slate-500">
-            <span>Hoạt động: <strong className="text-[#006E2D]">{overview?.users?.active ?? 48}</strong></span>
-            <span>Đã khóa: <strong className="text-[#BA1A1A]">{overview?.users?.locked ?? 2}</strong></span>
+            <span>Hoạt động: <strong className="text-[#006E2D]">{overview?.users?.active ?? '—'}</strong></span>
+            <span>Đã khóa: <strong className="text-[#BA1A1A]">{overview?.users?.locked ?? '—'}</strong></span>
           </div>
         </div>
 
@@ -105,12 +111,12 @@ export const AdminOverviewView = () => {
             </div>
           </div>
           <div className="text-3xl font-bold font-mono-num text-[#0B1C30]">
-            {overview?.ponds?.total ?? 120}{' '}
+            {overview?.ponds?.total ?? '—'}{' '}
             <span className="text-sm font-normal text-slate-500 font-sans">ao</span>
           </div>
           <div className="flex items-center justify-between pt-2 text-[11px] font-mono-num border-t border-slate-100 text-slate-500">
-            <span>{overview?.farms?.total ?? 35} Trang trại</span>
-            <span className="text-[#EA580C] font-bold">{overview?.ponds?.active ?? 110} ao đang thả</span>
+            <span>{overview?.farms?.total ?? '—'} Trang trại</span>
+            <span className="text-[#EA580C] font-bold">{overview?.ponds?.active ?? '—'} ao đang thả</span>
           </div>
         </div>
 
@@ -124,13 +130,15 @@ export const AdminOverviewView = () => {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold font-mono-num text-[#006E2D]">
-              {overview?.devices?.onlineRatePercent ?? 91.7}%
+              {overview?.devices?.onlineRatePercent !== undefined && overview?.devices?.onlineRatePercent !== null
+                ? `${overview.devices.onlineRatePercent}%`
+                : '—'}
             </span>
             <span className="text-xs text-slate-400 font-mono-num">trực tuyến</span>
           </div>
           <div className="flex items-center justify-between pt-2 text-[11px] font-mono-num border-t border-slate-100 text-slate-500">
-            <span>Online: <strong className="text-[#006E2D]">{overview?.devices?.online ?? 165}</strong></span>
-            <span>Offline: <strong className="text-[#BA1A1A]">{overview?.devices?.offline ?? 15}</strong></span>
+            <span>Online: <strong className="text-[#006E2D]">{overview?.devices?.online ?? '—'}</strong></span>
+            <span>Offline: <strong className="text-[#BA1A1A]">{overview?.devices?.offline ?? '—'}</strong></span>
           </div>
         </div>
 
@@ -144,15 +152,20 @@ export const AdminOverviewView = () => {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold font-mono-num text-[#EA580C]">
-              {fcrReport?.summary?.averageSystemFcr ?? 1.20}
+              {fcrReport?.summary?.averageSystemFcr ?? '—'}
             </span>
             <span className="px-2 py-0.5 rounded-full bg-[#E8F5E9] text-[#006E2D] font-bold border border-[#7CF994] text-[10px]">
-              {fcrReport?.summary?.systemQualityRating || 'Xuất sắc (< 1.3)'}
+              {fcrReport?.summary?.systemQualityRating || 'Chưa có đánh giá'}
             </span>
           </div>
           <div className="flex items-center justify-between pt-2 text-[11px] font-mono-num border-t border-slate-100 text-slate-500">
-            <span>Đánh giá {fcrReport?.summary?.totalSeasonsEvaluated ?? 8} vụ nuôi</span>
-            <span>{(fcrReport?.summary?.totalFeedConsumedSystemKg ?? 14200).toLocaleString('vi-VN')} kg cám</span>
+            <span>Đánh giá {fcrReport?.summary?.totalSeasonsEvaluated ?? 0} vụ nuôi</span>
+            <span>
+              {fcrReport?.summary?.totalFeedConsumedSystemKg !== undefined &&
+              fcrReport?.summary?.totalFeedConsumedSystemKg !== null
+                ? `${Number(fcrReport.summary.totalFeedConsumedSystemKg).toLocaleString('vi-VN')} kg cám`
+                : '— kg cám'}
+            </span>
           </div>
         </div>
       </div>
@@ -211,7 +224,7 @@ export const AdminOverviewView = () => {
               </h3>
             </div>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono-num font-bold bg-[#FEF3C7] text-[#B45309]">
-              {operational?.offlineDevices?.length ?? 1} THIẾT BỊ
+              {operational?.offlineDevices?.length ?? 0} THIẾT BỊ
             </span>
           </div>
 

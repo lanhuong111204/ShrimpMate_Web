@@ -96,17 +96,17 @@ export const Header = ({
   const activePondCount = ponds.filter((p) => p.status === 'active').length;
 
   return (
-    <header className="sticky top-0 z-40 h-15 bg-white text-[#0B1C30] border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between select-none shadow-2xs">
+    <header className="sticky top-0 z-40 h-16 bg-white text-[#0B1C30] border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between gap-3 select-none shadow-2xs">
       {/* Left: Brand Logo & Real Farm/Pond Selector Pills */}
-      <div className="flex items-center gap-3 md:gap-4">
+      <div className="flex items-center gap-3 md:gap-4 min-w-0">
         <div
           onClick={() => navigate('/')}
-          className="flex items-center gap-2.5 cursor-pointer"
+          className="flex items-center gap-2.5 cursor-pointer shrink-0"
         >
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FB923C] to-[#EA580C] text-white flex items-center justify-center font-display font-bold text-xs tracking-tight shrink-0 shadow-xs">
             <Waves className="w-5 h-5" />
           </div>
-          <div>
+          <div className="whitespace-nowrap">
             <div className="font-display font-bold text-sm tracking-tight text-[#0B1C30] leading-tight">
               ShrimpMate
             </div>
@@ -116,10 +116,10 @@ export const Header = ({
           </div>
         </div>
 
-        <div className="h-5 w-px bg-slate-200 hidden md:block" />
+        <div className="h-5 w-px bg-slate-200 hidden md:block shrink-0" />
 
         {/* Bộ chọn Trang trại & Ao nuôi thực tế từ Database */}
-        <div className="hidden md:flex items-center gap-2.5 text-xs">
+        <div className="hidden md:flex items-center gap-2.5 text-xs min-w-0">
           {farms.length > 0 ? (
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE] font-semibold">
               <Warehouse className="w-3.5 h-3.5 text-[#006398] shrink-0" />
@@ -166,15 +166,15 @@ export const Header = ({
           )}
 
           {ponds.length > 0 ? (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994] font-semibold">
-              <span className="w-2 h-2 rounded-full bg-[#006E2D]" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994] font-semibold whitespace-nowrap shrink-0">
+              <span className="w-2 h-2 rounded-full bg-[#006E2D] shrink-0" />
               <span>
                 Đang hoạt động ({activePondCount}/{ponds.length} ao)
               </span>
             </div>
           ) : (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-semibold">
-              <span className="w-2 h-2 rounded-full bg-slate-400" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-semibold whitespace-nowrap shrink-0">
+              <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
               <span>0 ao nuôi</span>
             </div>
           )}
@@ -182,12 +182,12 @@ export const Header = ({
       </div>
 
       {/* Right: Sync + Notifications + User Profile + E-Stop */}
-      <div className="flex items-center gap-2 sm:gap-2.5">
+      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
         {/* Sync Button */}
         <button
           onClick={onSync}
           title="Đồng bộ dữ liệu thực tế từ máy chủ"
-          className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0B1C30] border border-slate-200 text-xs font-semibold transition cursor-pointer"
+          className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0B1C30] border border-slate-200 text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
         >
           <RotateCw className={`w-3.5 h-3.5 text-[#006398] ${isSyncing ? 'animate-spin text-[#EA580C]' : ''}`} />
           <span className="font-mono-num">{currentTime}</span>

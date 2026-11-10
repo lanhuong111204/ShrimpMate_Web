@@ -1,27 +1,32 @@
 import React, { useState } from 'react';
-import { AlertOctagon, RefreshCw, RotateCw, CheckCircle2 } from 'lucide-react';
+import { AlertOctagon, RefreshCw, RotateCw, AlertCircle } from 'lucide-react';
 import { deviceService } from '../services/deviceService';
+import { getErrorMessage } from '../services/apiClient';
 
 export const EStopModal = ({ isOpen, onReset, activeDeviceId = null }) => {
   const [isResetting, setIsResetting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   if (!isOpen) return null;
 
   const handleConfirmReset = async () => {
     setIsResetting(true);
+    setErrorMessage('');
     try {
-      // Nếu có deviceId, có thể cập nhật chế độ thiết bị về manual hoặc automatic
+      // Nếu có deviceId, cập nhật chế độ thiết bị về manual
       if (activeDeviceId) {
-        await deviceService.updateDevice(activeDeviceId, { mode: 'manual' }).catch(() => {});
+        await deviceService.updateDevice(activeDeviceId, { mode: 'manual' });
       }
+      onReset?.();
+    } catch (err) {
+      setErrorMessage(getErrorMessage(err, 'Không thể gửi lệnh khôi phục thiết bị lên máy chủ.'));
     } finally {
       setIsResetting(false);
-      onReset?.();
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl max-w-lg w-full border-2 border-red-600 shadow-2xl p-6 space-y-5">
         <div className="flex items-center gap-3 text-red-600">
           <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
@@ -55,6 +60,24 @@ export const EStopModal = ({ isOpen, onReset, activeDeviceId = null }) => {
         </div>
 
         <div className="space-y-2">
+          {errorMessage && (
+            <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div>{errorMessage}</div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMessage('');
+                    onReset?.();
+                  }}
+                  className="mt-1 underline font-semibold cursor-pointer"
+                >
+                  Vẫn đóng cảnh báo trên màn hình
+                </button>
+              </div>
+            </div>
+          )}
           <div className="text-xs text-neutral-500">
             Kỹ sư vận hành cần kiểm tra hiện trường ao nuôi trước khi khôi phục hệ thống SCADA.
           </div>

@@ -1,24 +1,35 @@
-import React, { useState } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { 
-  Lock, 
-  User, 
-  Eye, 
-  EyeOff, 
-  ArrowRight, 
-  ShieldCheck, 
-  RotateCw, 
-  AlertCircle, 
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom';
+import {
+  Lock,
+  User,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  ShieldCheck,
+  RotateCw,
+  AlertCircle,
   Sparkles,
-  Waves
+  Waves,
+  Clock,
+  ShieldAlert,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { getErrorMessage } from '../../services/apiClient';
+import { getErrorMessage, parseLockoutError } from '../../services/apiClient';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
+
+const formatCountdown = (totalSeconds) => {
+  const safe = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+};
 
 export const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
@@ -27,15 +38,39 @@ export const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successToast, setSuccessToast] = useState('');
+  const [lockoutState, setLockoutState] = useState(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [sessionBannerDismissed, setSessionBannerDismissed] = useState(false);
 
   // Modal quên mật khẩu
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
 
   // Trang muốn chuyển tới sau khi đăng nhập xong
   const from = location.state?.from?.pathname || '/';
+  const showSessionExpiredBanner =
+    searchParams.get('session_expired') === '1' && !sessionBannerDismissed;
+  const isTempLocked = Boolean(
+    lockoutState && !lockoutState.isAdminLocked && remainingSeconds > 0
+  );
+
+  useEffect(() => {
+    if (!isTempLocked) return undefined;
+    const timer = setInterval(() => {
+      setRemainingSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isTempLocked]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (isTempLocked) return;
+
     if (!identifier.trim() || !password) {
       setErrorMessage('Vui lòng nhập đầy đủ tài khoản và mật khẩu.');
       return;
@@ -46,6 +81,8 @@ export const LoginPage = () => {
 
     try {
       const data = await login(identifier, password);
+      setLockoutState(null);
+      setRemainingSeconds(0);
       const userRole = data?.user?.role;
 
       if (userRole === 'admin') {
@@ -54,8 +91,24 @@ export const LoginPage = () => {
         navigate(from === '/login' ? '/' : from, { replace: true });
       }
     } catch (error) {
-      const msg = getErrorMessage(error, 'Đăng nhập không thành công, vui lòng kiểm tra lại thông tin.');
-      setErrorMessage(msg);
+      const lockout = parseLockoutError(error);
+      if (lockout.isLocked) {
+        setLockoutState({
+          isAdminLocked: lockout.isAdminLocked,
+          message: lockout.message,
+          identifier: identifier.trim().toLowerCase(),
+        });
+        setRemainingSeconds(lockout.isAdminLocked ? 0 : lockout.remainingSeconds);
+        setErrorMessage('');
+      } else {
+        setLockoutState(null);
+        setRemainingSeconds(0);
+        const msg = getErrorMessage(
+          error,
+          'Đăng nhập không thành công, vui lòng kiểm tra lại thông tin.'
+        );
+        setErrorMessage(msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -65,6 +118,10 @@ export const LoginPage = () => {
     setIdentifier(idVal);
     setPassword(passVal);
     setErrorMessage('');
+    if (lockoutState && idVal.trim().toLowerCase() !== lockoutState.identifier) {
+      setLockoutState(null);
+      setRemainingSeconds(0);
+    }
   };
 
   return (
@@ -110,6 +167,80 @@ export const LoginPage = () => {
               Nhập email hoặc số điện thoại để truy cập trung tâm quản lý trang trại.
             </p>
           </div>
+
+          {/* Banner hết hạn phiên đăng nhập (?session_expired=1) */}
+          {showSessionExpiredBanner && (
+            <div className="mb-4 p-3.5 bg-amber-50 border border-amber-300 text-[#9D4300] rounded-xl text-xs font-medium flex items-start justify-between gap-2.5 leading-relaxed">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-[#EA580C] mt-0.5" />
+                <div>
+                  <p className="font-bold text-[#9D4300]">
+                    Phiên đăng nhập đã hết hạn hoặc bị thu hồi quyền
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-[#9D4300]/90">
+                    Vui lòng đăng nhập lại để tiếp tục truy cập hệ thống.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSessionBannerDismissed(true)}
+                className="text-amber-700/70 hover:text-amber-900 text-xs font-bold px-1 cursor-pointer"
+                aria-label="Đóng thông báo"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Cảnh báo khóa vĩnh viễn (ACCOUNT_PENDING_ADMIN_UNLOCK) */}
+          {lockoutState?.isAdminLocked && (
+            <div className="mb-4 p-4 bg-[#FFDAD6]/80 border-2 border-[#BA1A1A]/50 text-[#93000A] rounded-xl text-xs leading-relaxed shadow-xs">
+              <div className="flex items-start gap-2.5">
+                <ShieldAlert className="w-5 h-5 shrink-0 text-[#BA1A1A] mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-extrabold text-[#BA1A1A] uppercase tracking-wide text-[11px]">
+                    Tài khoản đã bị khóa bảo mật
+                  </p>
+                  <p className="font-medium">{lockoutState.message}</p>
+                  <p className="text-[11px] font-bold text-[#93000A]">
+                    Vui lòng liên hệ Quản trị viên (Admin) để mở khóa tài khoản trước khi đăng nhập lại.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cảnh báo khóa tạm thời kèm đồng hồ đếm ngược MM:SS */}
+          {lockoutState && !lockoutState.isAdminLocked && (
+            <div className="mb-4 p-4 bg-gradient-to-r from-[#FFF8F5] to-[#FFDAD6]/50 border border-[#EA580C]/45 text-[#93000A] rounded-xl text-xs leading-relaxed">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <Clock className="w-4 h-4 shrink-0 text-[#EA580C] mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold text-[#9D4300]">
+                      {isTempLocked
+                        ? 'Tài khoản tạm thời bị khóa'
+                        : 'Đã hết thời gian tạm khóa'}
+                    </p>
+                    <p className="font-medium text-[#93000A]">
+                      {isTempLocked
+                        ? lockoutState.message
+                        : 'Bạn có thể thử đăng nhập lại ngay bây giờ. Vui lòng kiểm tra kỹ mật khẩu.'}
+                    </p>
+                  </div>
+                </div>
+                {isTempLocked && (
+                  <div
+                    aria-label="Thời gian mở khóa còn lại"
+                    className="shrink-0 px-2.5 py-1.5 rounded-lg bg-[#BA1A1A] text-white font-mono-num font-extrabold text-sm tracking-wider shadow-xs"
+                  >
+                    {formatCountdown(remainingSeconds)}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Thông báo lỗi */}
           {errorMessage && (
@@ -185,13 +316,20 @@ export const LoginPage = () => {
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={isLoading}
-                className="w-full h-11 bg-gradient-to-r from-[#FB923C] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] active:scale-[0.99] text-white font-bold text-xs tracking-wide rounded-xl shadow-md shadow-[#EA580C]/25 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                disabled={isLoading || isTempLocked}
+                className="w-full h-11 bg-gradient-to-r from-[#FB923C] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] active:scale-[0.99] text-white font-bold text-xs tracking-wide rounded-xl shadow-md shadow-[#EA580C]/25 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <>
                     <RotateCw className="w-4 h-4 animate-spin" />
                     <span>Đang xác thực...</span>
+                  </>
+                ) : isTempLocked ? (
+                  <>
+                    <Clock className="w-4 h-4" />
+                    <span>
+                      Tạm khóa — Thử lại sau {formatCountdown(remainingSeconds)}
+                    </span>
                   </>
                 ) : (
                   <>

@@ -44,22 +44,44 @@ export const setStoredUser = (user) => {
   }
 };
 
+const isAccountLockoutMessage = (text) => {
+  if (!text) return false;
+  const lower = String(text).toLowerCase();
+  return (
+    lower.includes('khóa') ||
+    lower.includes('account_pending_admin_unlock') ||
+    lower.includes('tạm thời') ||
+    lower.includes('lock')
+  );
+};
+
 // Trích xuất thông báo lỗi chuẩn từ phản hồi của Backend
 export const getErrorMessage = (error, defaultMessage = 'Đã có lỗi xảy ra, vui lòng thử lại!') => {
   if (!error) return defaultMessage;
   if (error.response?.data?.message) {
     const msg = error.response.data.message;
     const text = Array.isArray(msg) ? msg.join(', ') : String(msg);
-    if (error.response.status === 403 && (text === 'Forbidden resource' || text === 'Forbidden')) {
-      return 'Bạn không có quyền thực hiện thao tác hoặc truy cập tài nguyên này (403 Forbidden).';
+    if (error.response.status === 403) {
+      if (isAccountLockoutMessage(text)) {
+        return text;
+      }
+      if (text === 'Forbidden resource' || text === 'Forbidden') {
+        return 'Bạn không có quyền thực hiện thao tác hoặc truy cập tài nguyên này (403 Forbidden).';
+      }
     }
     return text;
   }
   if (error.response?.data?.error) {
-    if (error.response.status === 403 && error.response.data.error === 'Forbidden') {
-      return 'Bạn không có quyền thực hiện thao tác hoặc truy cập tài nguyên này (403 Forbidden).';
+    const errText = String(error.response.data.error);
+    if (error.response.status === 403) {
+      if (isAccountLockoutMessage(errText)) {
+        return errText;
+      }
+      if (errText === 'Forbidden') {
+        return 'Bạn không có quyền thực hiện thao tác hoặc truy cập tài nguyên này (403 Forbidden).';
+      }
     }
-    return String(error.response.data.error);
+    return errText;
   }
   if (error.code === 'ECONNABORTED' || error.message?.toLowerCase().includes('timeout')) {
     return 'Kết nối máy chủ Backend quá thời gian chờ (Timeout). Vui lòng kiểm tra kết nối mạng hoặc địa chỉ API!';
@@ -71,6 +93,95 @@ export const getErrorMessage = (error, defaultMessage = 'Đã có lỗi xảy ra
     return error.message;
   }
   return defaultMessage;
+};
+
+/**
+ * Phân tích phản hồi lỗi khóa tài khoản Brute-Force (HTTP 403 từ POST /auth/login)
+ * @param {any} error
+ * @returns {{ isLocked: boolean, isAdminLocked: boolean, remainingMinutes: number, remainingSeconds: number, message: string }}
+ */
+export const parseLockoutError = (error) => {
+  const empty = {
+    isLocked: false,
+    isAdminLocked: false,
+    remainingMinutes: 0,
+    remainingSeconds: 0,
+    message: '',
+  };
+
+  if (!error?.response || error.response.status !== 403) {
+    return empty;
+  }
+
+  const data = error.response.data || {};
+  const rawMsg = data.message;
+  const message = Array.isArray(rawMsg)
+    ? rawMsg.join(', ')
+    : rawMsg
+      ? String(rawMsg)
+      : data.error
+        ? String(data.error)
+        : '';
+
+  if (
+    !isAccountLockoutMessage(message) &&
+    data.code !== 'ACCOUNT_PENDING_ADMIN_UNLOCK' &&
+    data.status !== 'ACCOUNT_PENDING_ADMIN_UNLOCK'
+  ) {
+    return { ...empty, message };
+  }
+
+  const lower = message.toLowerCase();
+  const isAdminLocked =
+    lower.includes('account_pending_admin_unlock') ||
+    data.code === 'ACCOUNT_PENDING_ADMIN_UNLOCK' ||
+    data.status === 'ACCOUNT_PENDING_ADMIN_UNLOCK' ||
+    data.isAdminLocked === true ||
+    lower.includes('vĩnh viễn') ||
+    lower.includes('liên hệ admin') ||
+    lower.includes('admin để mở khóa') ||
+    lower.includes('10 lần');
+
+  if (isAdminLocked) {
+    return {
+      isLocked: true,
+      isAdminLocked: true,
+      remainingMinutes: 0,
+      remainingSeconds: 0,
+      message:
+        message ||
+        'Tài khoản đang trong trạng thái ACCOUNT_PENDING_ADMIN_UNLOCK do nhập sai quá nhiều lần. Vui lòng liên hệ Admin để mở khóa.',
+    };
+  }
+
+  const explicitMinutes = Number(data.remainingMinutes);
+  const explicitSeconds = Number(data.remainingSeconds);
+  const minuteMatch = message.match(/(\d+)\s*phút/i);
+
+  let remainingMinutes = 15;
+  if (!Number.isNaN(explicitMinutes) && explicitMinutes > 0) {
+    remainingMinutes = explicitMinutes;
+  } else if (minuteMatch) {
+    const parsed = Number(minuteMatch[1]);
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      remainingMinutes = parsed;
+    }
+  } else if (!Number.isNaN(explicitSeconds) && explicitSeconds > 0) {
+    remainingMinutes = Math.ceil(explicitSeconds / 60);
+  }
+
+  const remainingSeconds =
+    !Number.isNaN(explicitSeconds) && explicitSeconds > 0
+      ? Math.ceil(explicitSeconds)
+      : Math.ceil(remainingMinutes * 60);
+
+  return {
+    isLocked: true,
+    isAdminLocked: false,
+    remainingMinutes,
+    remainingSeconds,
+    message,
+  };
 };
 
 // Cấu hình Base URL

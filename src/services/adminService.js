@@ -45,6 +45,14 @@ export const adminService = {
   },
 
   /**
+   * Mở khóa tài khoản bị khóa do đăng nhập sai nhiều lần (ACCOUNT_PENDING_ADMIN_UNLOCK)
+   * @param {string} id
+   */
+  unlockUser: async (id) => {
+    return await apiClient.patch(`/auth/users/${id}/unlock`);
+  },
+
+  /**
    * Phân bổ vai trò tài khoản (admin, manager, farmer - Chặn admin tự hạ quyền)
    * @param {string} id
    * @param {string} role - 'admin' | 'manager' | 'farmer'

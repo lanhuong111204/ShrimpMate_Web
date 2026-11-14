@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { RotateCw, Waves } from 'lucide-react';
 
 export const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, sessionExpired } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -32,7 +32,13 @@ export const ProtectedRoute = ({ children }) => {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return (
+      <Navigate
+        to={sessionExpired ? '/login?session_expired=1' : '/login'}
+        state={{ from: location }}
+        replace
+      />
+    );
   }
 
   return children ? children : <Outlet />;

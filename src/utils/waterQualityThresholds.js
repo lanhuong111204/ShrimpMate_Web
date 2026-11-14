@@ -125,14 +125,14 @@ export const WATER_QUALITY_THRESHOLDS = {
     key: 'ammoniaMgL',
     label: 'Khí độc NH₃',
     unit: 'mg/L',
-    optimalRangeText: '≤ 0.1 mg/L',
-    warningRangeText: '> 0.1 – 0.3 mg/L',
+    optimalRangeText: '≤ 0.05 mg/L',
+    warningRangeText: '> 0.05 – 0.3 mg/L',
     dangerRangeText: '> 0.3 mg/L',
     evaluate: (raw) => {
       const v = toValidNumber(raw);
       if (v === null) return 'unknown';
       if (v > 0.3) return 'red';
-      if (v > 0.1) return 'yellow';
+      if (v > 0.05) return 'yellow';
       return 'green';
     },
   },

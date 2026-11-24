@@ -225,10 +225,15 @@ const SCADAAppContent = () => {
             enabledSchedules.reduce((sum, s) => sum + Number(s.feedAmountKg || 0), 0).toFixed(1)
           );
 
-          // Tính tổng lượng cám đã rải từ các bản ghi cho ăn thực tế
+          const todayStr = new Date().toISOString().slice(0, 10);
+
+          // Tính tổng lượng cám đã rải trong ngày hôm nay từ các bản ghi cho ăn thực tế
           const sprayedKg = parseFloat(
             records
-              .filter((r) => r.status === 'completed' || r.status === 'running')
+              .filter((r) => {
+                const recordDate = (r.startedAt || r.createdAt || '').slice(0, 10);
+                return recordDate === todayStr && (r.status === 'completed' || r.status === 'running');
+              })
               .reduce((sum, r) => sum + Number(r.actualAmountKg ?? r.requestedAmountKg ?? 0), 0)
               .toFixed(1)
           );
@@ -257,6 +262,20 @@ const SCADAAppContent = () => {
             ? fisVal.status?.appetiteLevelDescription || `Mức ${fisLevel}`
             : 'Chưa có dữ liệu';
 
+          // Kiểm tra bản ghi cữ ăn mới nhất (trong vòng 15 phút gần nhất) có đang chạy không
+          const sortedRecords = [...records].sort(
+            (a, b) =>
+              new Date(b.createdAt || b.startedAt || 0).getTime() -
+              new Date(a.createdAt || a.startedAt || 0).getTime()
+          );
+          const latestRecord = sortedRecords[0] || null;
+          const isLatestRunning =
+            latestRecord &&
+            (latestRecord.status === 'running' || latestRecord.status === 'in_progress');
+
+          // Cữ ăn chỉ coi là đang diễn ra nếu bản ghi mới nhất thực sự đang chạy
+          const isFeeding = Boolean(isLatestRunning);
+
           // Xác định trạng thái vận hành thực tế của ao
           let operationalStatus = pond.status || 'active';
           if (hopperKg !== null && hopperKg < 5) {
@@ -273,6 +292,8 @@ const SCADAAppContent = () => {
             areaM2: Number(pond.areaM2 || 0),
             area: `${Number(pond.areaM2 || 0).toLocaleString('vi-VN')} m²`,
             status: operationalStatus,
+            isFeeding,
+            activeFeedingRecord: isFeeding ? latestRecord : null,
             dbStatus: pond.status || 'active',
             shrimpType: activeSeason?.name || 'Chưa khai báo vụ nuôi',
             stockingCount: activeSeason?.initialCount
@@ -288,6 +309,12 @@ const SCADAAppContent = () => {
             salinity: hasTelemetry && telemetry.salinityPpt !== null ? Number(telemetry.salinityPpt) : null,
             nh3: hasTelemetry && telemetry.ammoniaMgL !== null ? Number(telemetry.ammoniaMgL) : null,
             turbidity: hasTelemetry && telemetry.turbidityNtu !== null ? Number(telemetry.turbidityNtu) : null,
+            airTemp: hasTelemetry && (telemetry.airTemperatureC ?? telemetry.airTemp ?? telemetry.air) !== undefined && (telemetry.airTemperatureC ?? telemetry.airTemp ?? telemetry.air) !== null
+              ? Number(telemetry.airTemperatureC ?? telemetry.airTemp ?? telemetry.air)
+              : 24.0,
+            humidity: hasTelemetry && (telemetry.humidityPercent ?? telemetry.humidity ?? telemetry.rhPercent ?? telemetry.rh) !== undefined && (telemetry.humidityPercent ?? telemetry.humidity ?? telemetry.rhPercent ?? telemetry.rh) !== null
+              ? Number(telemetry.humidityPercent ?? telemetry.humidity ?? telemetry.rhPercent ?? telemetry.rh)
+              : 40.0,
             fisLevel,
             fisScore,
             fisLabel,
@@ -396,6 +423,14 @@ const SCADAAppContent = () => {
     try {
       if (activePond?.deviceId) {
         await deviceService.emergencyStop(activePond.deviceId);
+      }
+      // Dừng ngay cữ ăn đang chạy của ao nếu có
+      if (activePond?.activeFeedingRecord?.id) {
+        await feedingService
+          .updateRecord(activePond.activeFeedingRecord.id, {
+            status: 'stopped',
+          })
+          .catch(() => {});
       }
     } catch (err) {
       showToast(getErrorMessage(err, 'Không thể gửi lệnh dừng khẩn cấp lên máy chủ Backend!'), 'alert');

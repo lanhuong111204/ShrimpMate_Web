@@ -6,7 +6,7 @@ import {
   Users, 
   Settings2, 
   Clock, 
-  Camera, 
+  Droplets, 
   Radio, 
   History,
   Shield,
@@ -113,8 +113,8 @@ export const Sidebar = ({
           className={navItemClass(currentTab === 'camera-fis' || currentTab === 'acoustics')}
         >
           <div className="flex items-center gap-2.5">
-            <Camera className="w-4 h-4 shrink-0" />
-            <span>Chỉ số Nước & Camera FIS</span>
+            <Droplets className="w-4 h-4 shrink-0" />
+            <span>Chỉ số Môi trường Nước</span>
           </div>
           <span
             className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
@@ -123,7 +123,7 @@ export const Sidebar = ({
                 : 'bg-[#006398]/40 text-[#CCE5FF]'
             }`}
           >
-            6 Chỉ số
+            8 Chỉ số
           </span>
         </button>
 

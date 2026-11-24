@@ -141,8 +141,8 @@ export const Header = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleLogout = async () => {
-    await logout();
+  const handleLogout = () => {
+    logout();
     navigate('/login');
   };
 
@@ -174,12 +174,12 @@ export const Header = ({
   const activePondCount = ponds.filter((p) => p.status === 'active').length;
 
   return (
-    <header className="sticky top-0 z-40 h-16 bg-white text-[#0B1C30] border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between gap-3 select-none shadow-2xs">
+    <header className="sticky top-0 z-40 h-16 bg-white text-[#0B1C30] border-b border-slate-200 px-3 sm:px-5 flex items-center justify-between gap-2.5 select-none shadow-2xs">
       {/* Left: Brand Logo & Real Farm/Pond Selector Pills */}
-      <div className="flex items-center gap-3 md:gap-4 min-w-0">
+      <div className="flex items-center gap-2.5 lg:gap-3.5 min-w-0">
         <div
           onClick={() => navigate('/')}
-          className="flex items-center gap-2.5 cursor-pointer shrink-0"
+          className="flex items-center gap-2 cursor-pointer shrink-0"
         >
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FB923C] to-[#EA580C] text-white flex items-center justify-center font-display font-bold text-xs tracking-tight shrink-0 shadow-xs">
             <Waves className="w-5 h-5" />
@@ -194,17 +194,17 @@ export const Header = ({
           </div>
         </div>
 
-        <div className="h-5 w-px bg-slate-200 hidden md:block shrink-0" />
+        <div className="h-5 w-px bg-slate-200 hidden lg:block shrink-0" />
 
         {/* Bộ chọn Trang trại & Ao nuôi thực tế từ Database */}
-        <div className="hidden md:flex items-center gap-2.5 text-xs min-w-0">
+        <div className="hidden lg:flex items-center gap-2 text-xs min-w-0">
           {farms.length > 0 ? (
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE] font-semibold">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#EFF4FF] text-[#006398] border border-[#D3E4FE] font-semibold shrink-0">
               <Warehouse className="w-3.5 h-3.5 text-[#006398] shrink-0" />
               <select
                 value={selectedFarmId}
                 onChange={(e) => onSelectFarm?.(e.target.value)}
-                className="bg-transparent font-bold text-[#006398] focus:outline-none cursor-pointer max-w-[190px] truncate"
+                className="bg-transparent font-bold text-[#006398] focus:outline-none cursor-pointer max-w-[130px] xl:max-w-[160px] truncate"
                 title="Chọn trang trại hiển thị"
               >
                 <option value="all">Tất cả trang trại ({farms.length})</option>
@@ -221,7 +221,7 @@ export const Header = ({
                   <select
                     value={activePond?.id || ''}
                     onChange={(e) => onSelectPond?.(e.target.value)}
-                    className="font-mono-num font-bold text-[#0B1C30] bg-white px-2 py-0.5 rounded-md border border-[#D3E4FE] focus:outline-none cursor-pointer"
+                    className="font-mono-num font-bold text-[#0B1C30] bg-white px-2 py-0.5 rounded-md border border-[#D3E4FE] focus:outline-none cursor-pointer max-w-[140px] xl:max-w-[180px] truncate"
                     title="Chọn ao nuôi đang điều khiển"
                   >
                     {ponds.map((p) => (
@@ -236,22 +236,22 @@ export const Header = ({
           ) : (
             <button
               onClick={() => navigate('/ponds')}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-semibold hover:bg-amber-100 transition cursor-pointer"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-semibold hover:bg-amber-100 transition cursor-pointer shrink-0"
             >
               <Warehouse className="w-3.5 h-3.5 text-amber-600" />
-              <span>Chưa có trang trại • Bấm để khởi tạo</span>
+              <span>Chưa có trang trại</span>
             </button>
           )}
 
           {ponds.length > 0 ? (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994] font-semibold whitespace-nowrap shrink-0">
+            <div className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994] font-semibold whitespace-nowrap shrink-0">
               <span className="w-2 h-2 rounded-full bg-[#006E2D] shrink-0" />
               <span>
-                Đang hoạt động ({activePondCount}/{ponds.length} ao)
+                {activePondCount}/{ponds.length} ao hoạt động
               </span>
             </div>
           ) : (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-semibold whitespace-nowrap shrink-0">
+            <div className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-semibold whitespace-nowrap shrink-0">
               <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
               <span>0 ao nuôi</span>
             </div>

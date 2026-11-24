@@ -165,6 +165,7 @@ export const DashboardView = ({
       : null;
 
   const onlineFeeders = ponds.filter((p) => p.feederDevice && p.feederDevice.status === 'online').length;
+  const feedingPondsCount = ponds.filter((p) => p.isFeeding).length;
   const totalFeeders = ponds.filter((p) => p.feederDevice).length;
   const warningPonds = ponds.filter(
     (p) => p.status === 'empty_hopper' || (p.do !== null && p.do < 4.0)
@@ -214,6 +215,17 @@ export const DashboardView = ({
   };
 
   const renderStatusBadge = (pond) => {
+    if (pond.isFeeding) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-[#FFF7ED] text-[#EA580C] border border-[#FDBA74] shadow-xs">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#EA580C] opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#EA580C]"></span>
+          </span>
+          Đang cho ăn
+        </span>
+      );
+    }
     if (pond.status === 'empty_hopper') {
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-[#FEF3C7] text-[#B45309] border border-amber-300">
@@ -424,9 +436,19 @@ export const DashboardView = ({
             <span className="px-2 py-0.5 rounded-md bg-[#E8F5E9] text-[#006E2D] font-bold">
               {onlineFeeders} Sẵn sàng
             </span>
-            <span className="px-2 py-0.5 rounded-md bg-[#EFF4FF] text-[#006398] font-bold">
-              {ponds.length - totalFeeders} Ao chưa gán máy
-            </span>
+            {feedingPondsCount > 0 ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FFF7ED] text-[#EA580C] font-bold border border-[#FDBA74]">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#EA580C] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#EA580C]"></span>
+                </span>
+                {feedingPondsCount} ao đang ăn
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-md bg-[#EFF4FF] text-[#006398] font-bold">
+                {ponds.length - totalFeeders} Ao chưa gán máy
+              </span>
+            )}
           </div>
         </div>
 
@@ -541,6 +563,7 @@ export const DashboardView = ({
             {ponds.map((pond) => {
               const isAlert = pond.status === 'empty_hopper';
               const isPaused = pond.dbStatus === 'maintenance';
+              const isFeeding = Boolean(pond.isFeeding);
               const progressPercent =
                 pond.targetKg > 0
                   ? Math.min(100, Math.round((pond.sprayedKg / pond.targetKg) * 100))
@@ -550,7 +573,9 @@ export const DashboardView = ({
                 <div
                   key={pond.id}
                   className={`bg-white rounded-2xl p-5 border transition shadow-2xs hover:shadow-md ${
-                    isAlert
+                    isFeeding
+                      ? 'border-[#EA580C] ring-2 ring-[#EA580C]/20 shadow-orange-100'
+                      : isAlert
                       ? 'border-amber-300'
                       : 'border-slate-200 hover:border-[#EA580C]/50'
                   }`}
@@ -560,13 +585,21 @@ export const DashboardView = ({
                     <div className="flex items-start gap-3">
                       <div
                         onClick={() => onNavigateTab('feeder', pond.id)}
-                        className={`w-11 h-11 rounded-xl font-extrabold text-xs flex items-center justify-center font-mono-num cursor-pointer shrink-0 ${
-                          isAlert
+                        className={`w-11 h-11 rounded-xl font-extrabold text-xs flex items-center justify-center font-mono-num cursor-pointer shrink-0 relative ${
+                          isFeeding
+                            ? 'bg-[#EA580C] text-white shadow-xs'
+                            : isAlert
                             ? 'bg-[#FEF3C7] text-[#B45309] border border-amber-300'
                             : 'bg-[#FFF8F5] text-[#EA580C] border border-[#FFDBCA]'
                         }`}
                       >
                         {pond.code}
+                        {isFeeding && (
+                          <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#EA580C] opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-[#EA580C] border-2 border-white"></span>
+                          </span>
+                        )}
                       </div>
                       <div>
                         {/* Nhãn Trang trại trực thuộc */}
@@ -653,8 +686,14 @@ export const DashboardView = ({
                   {/* Thanh tiến độ rải cám */}
                   <div className="space-y-1.5 mb-4">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-500 font-medium">
-                        Tồn phễu máy cho ăn:{' '}
+                      <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                        {isFeeding && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#EA580C]">
+                            <RotateCw className="w-3 h-3 animate-spin" />
+                            Đang rải:
+                          </span>
+                        )}
+                        Tồn phễu:{' '}
                         <strong className="text-[#0B1C30] font-mono-num">
                           {pond.hopperKg !== null ? `${pond.hopperKg} kg` : 'Chưa gán máy'}
                         </strong>
@@ -665,7 +704,9 @@ export const DashboardView = ({
                     </div>
                     <div className="w-full h-2.5 bg-[#FFDBCA]/70 rounded-full overflow-hidden">
                       <div
-                        className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-[#FB923C] to-[#EA580C]"
+                        className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r from-[#FB923C] to-[#EA580C] ${
+                          isFeeding ? 'animate-feed-stripes' : ''
+                        }`}
                         style={{ width: `${progressPercent}%` }}
                       />
                     </div>
@@ -777,14 +818,19 @@ export const DashboardView = ({
                         </td>
                         <td className="py-3.5 px-4 min-w-[160px]">
                           <div className="flex justify-between text-xs font-mono-num mb-1">
-                            <span className="text-slate-500">{pond.currentMeal}</span>
+                            <span className="text-slate-500 flex items-center gap-1">
+                              {pond.isFeeding && <RotateCw className="w-3 h-3 text-[#EA580C] animate-spin" />}
+                              {pond.currentMeal}
+                            </span>
                             <span className="font-bold text-[#EA580C]">
                               {pond.sprayedKg} / {pond.targetKg} kg
                             </span>
                           </div>
                           <div className="w-full h-2 bg-[#FFDBCA]/70 rounded-full overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-gradient-to-r from-[#FB923C] to-[#EA580C] transition-all duration-500"
+                              className={`h-full rounded-full bg-gradient-to-r from-[#FB923C] to-[#EA580C] transition-all duration-500 ${
+                                pond.isFeeding ? 'animate-feed-stripes' : ''
+                              }`}
                               style={{ width: `${progressPercent}%` }}
                             />
                           </div>

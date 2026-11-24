@@ -10,13 +10,55 @@ import {
   Building2,
   Droplets,
   AlertCircle,
+  AlertTriangle,
+  Activity,
+  Wand2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { feedingService } from '../services/feedingService';
 import { safetyRuleService } from '../services/safetyRuleService';
+import { aiService } from '../services/aiService';
 import { getErrorMessage } from '../services/apiClient';
 import { ConfirmModal } from './common/ConfirmModal';
 import { useConfirm } from '../hooks/useConfirm';
+import { AiRecommendationCard } from './ai/AiRecommendationCard';
+import { SafetyBlockedModal } from './feeder/SafetyBlockedModal';
+
+const RULE_FIELD_LABELS = {
+  dissolvedOxygenMgL: 'Oxy hòa tan (DO)',
+  ph: 'Độ pH',
+  temperatureC: 'Nhiệt độ nước',
+  ammoniaMgL: 'Khí độc NH₃',
+  salinityPpt: 'Độ mặn',
+  turbidityNtu: 'Độ đục',
+};
+
+const formatRuleCondition = (condition) => {
+  if (!condition || typeof condition !== 'object') return 'Không có điều kiện';
+  if (condition.checkDevice) {
+    return 'Kiểm tra trạng thái kết nối máy cho ăn / cảm biến';
+  }
+  if (Array.isArray(condition.or)) {
+    return condition.or.map((c) => formatRuleCondition(c)).join(' HOẶC ');
+  }
+  if (Array.isArray(condition.and)) {
+    return condition.and.map((c) => formatRuleCondition(c)).join(' VÀ ');
+  }
+  const fieldKey = condition.field || condition.parameter;
+  const fieldLabel = RULE_FIELD_LABELS[fieldKey] || fieldKey || 'Chỉ số';
+  const operator = condition.operator || '';
+  const threshold = condition.value ?? condition.threshold ?? '';
+  return `${fieldLabel} ${operator} ${threshold}`.trim();
+};
+
+const getLocalDateKey = (dateInput = new Date()) => {
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 export const ScheduleView = ({
   ponds = [],
@@ -33,6 +75,12 @@ export const ScheduleView = ({
 
   const [schedules, setSchedules] = useState([]);
   const [records, setRecords] = useState([]);
+  const [aiRecommendation, setAiRecommendation] = useState(null);
+  const [predictedTrends, setPredictedTrends] = useState(null);
+  const [scheduleRecommendation, setScheduleRecommendation] = useState(null);
+  const [isPredictingAi, setIsPredictingAi] = useState(false);
+  const [safetyEvaluation, setSafetyEvaluation] = useState(null);
+  const [isSafetyModalOpen, setIsSafetyModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [createScheduleError, setCreateScheduleError] = useState('');
@@ -53,6 +101,9 @@ export const ScheduleView = ({
     if (!selectedPond?.id) {
       setSchedules([]);
       setRecords([]);
+      setAiRecommendation(null);
+      setPredictedTrends(null);
+      setScheduleRecommendation(null);
       setLoadError('');
       return;
     }
@@ -62,9 +113,12 @@ export const ScheduleView = ({
     setScheduleActionError('');
     setSafetyRuleError('');
     try {
-      const [schedRes, recRes] = await Promise.allSettled([
+      const [schedRes, recRes, aiRes, trendsRes, schedRecRes] = await Promise.allSettled([
         feedingService.getSchedules(selectedPond.id),
         feedingService.getRecords(selectedPond.id),
+        aiService.getLatestRecommendation(selectedPond.id),
+        aiService.getPredictedTrends(selectedPond.id),
+        feedingService.getScheduleRecommendation(selectedPond.id),
       ]);
 
       const errs = [];
@@ -86,6 +140,10 @@ export const ScheduleView = ({
         setRecords([]);
         errs.push(getErrorMessage(recRes.reason, 'Không thể tải lịch sử cữ ăn.'));
       }
+
+      setAiRecommendation(aiRes.status === 'fulfilled' ? aiRes.value : null);
+      setPredictedTrends(trendsRes.status === 'fulfilled' ? trendsRes.value : null);
+      setScheduleRecommendation(schedRecRes.status === 'fulfilled' ? schedRecRes.value : null);
 
       if (errs.length > 0) {
         setLoadError(errs[0]);
@@ -116,15 +174,97 @@ export const ScheduleView = ({
     );
   }
 
-  // Tính toán tổng định mức thực tế từ DB
+  // Tính toán tổng định mức thực tế từ DB (lọc lượng đã rải trong ngày hôm nay theo giờ địa phương)
   const totalKg = schedules.reduce(
     (sum, item) => (item.isEnabled ? sum + Number(item.feedAmountKg || 0) : sum),
     0,
   );
+  const todayKey = getLocalDateKey(new Date());
   const sprayedKg = records
-    .filter((r) => r.status === 'completed')
+    .filter((r) => {
+      const ts = r.startedAt || r.createdAt;
+      return (
+        ts &&
+        getLocalDateKey(ts) === todayKey &&
+        (r.status === 'completed' || r.status === 'running' || r.status === 'in_progress')
+      );
+    })
     .reduce((sum, r) => sum + Number(r.actualAmountKg || r.requestedAmountKg || 0), 0);
   const remainingKg = Math.max(0, totalKg - sprayedKg);
+
+  const openBlockedModal = (reasons = []) => {
+    setSafetyEvaluation({
+      decision: 'blocked',
+      reasons: reasons.length > 0 ? reasons : ['Chất lượng nước vượt ngưỡng an toàn QCVN.'],
+      telemetrySnapshot: {
+        dissolvedOxygenMgL: selectedPond?.do ?? null,
+        ph: selectedPond?.ph ?? null,
+        temperatureC: selectedPond?.temp ?? null,
+      },
+    });
+    setIsSafetyModalOpen(true);
+  };
+
+  const handlePredictAi = async () => {
+    if (!selectedPond?.id || isPredictingAi) return;
+    setIsPredictingAi(true);
+    try {
+      const [predRes, trendsRes] = await Promise.allSettled([
+        aiService.predictFeed(selectedPond.id, {}),
+        aiService.getPredictedTrends(selectedPond.id),
+      ]);
+      if (predRes.status === 'fulfilled' && predRes.value) {
+        setAiRecommendation(predRes.value);
+        onShowToast?.(
+          `Đã cập nhật dự báo AI (${Number(predRes.value.safeAllowedAmountKg ?? predRes.value.predictedFeedAmountKg ?? 0).toFixed(2)} kg/cữ).`,
+          'success'
+        );
+      } else if (predRes.status === 'rejected') {
+        onShowToast?.(getErrorMessage(predRes.reason, 'Không thể chạy dự báo AI lúc này.'), 'alert');
+      }
+      if (trendsRes.status === 'fulfilled' && trendsRes.value) {
+        setPredictedTrends(trendsRes.value);
+      }
+    } finally {
+      setIsPredictingAi(false);
+    }
+  };
+
+  const handleApplyAiToSchedule = (amountKg) => {
+    if (!canEdit) {
+      onShowToast?.('Chỉ Quản lý (Manager) hoặc Admin mới được tạo lịch cho ăn tự động.', 'info');
+      return;
+    }
+    const suggestedRate =
+      scheduleRecommendation?.scheduleRecommendation?.suggestedSpreadRate || 1.5;
+    setNewSchedule((prev) => ({
+      ...prev,
+      feedAmountKg: Number(Number(amountKg || 0).toFixed(1)),
+      spreadRateKgPerMinute: Number(suggestedRate),
+    }));
+    setCreateScheduleError('');
+    setShowAddForm(true);
+    onShowToast?.(
+      `Đã điền mức cám AI (${Number(amountKg).toFixed(1)} kg) vào form tạo khung giờ mới.`,
+      'info'
+    );
+  };
+
+  const handleApplyScheduleRecommendation = () => {
+    const rec = scheduleRecommendation?.scheduleRecommendation;
+    if (!rec || !canEdit) return;
+    setNewSchedule((prev) => ({
+      ...prev,
+      feedAmountKg: Number(Number(rec.suggestedAmountPerMealKg || 10).toFixed(1)),
+      spreadRateKgPerMinute: Number(rec.suggestedSpreadRate || 1.5),
+    }));
+    setCreateScheduleError('');
+    setShowAddForm(true);
+    onShowToast?.(
+      `Đã điền khẩu phần khuyến nghị (${Number(rec.suggestedAmountPerMealKg || 0).toFixed(1)} kg/cữ) vào form tạo lịch.`,
+      'info'
+    );
+  };
 
   // Điều chỉnh khối lượng cữ ăn trực tiếp xuống Backend
   const handleStepWeight = async (sched, delta) => {
@@ -255,10 +395,18 @@ export const ScheduleView = ({
         requestedAmountKg: Number(sched.feedAmountKg),
         source: 'schedule',
       });
-      if (record.status === 'blocked_by_safety') {
-        setScheduleActionError(
-          `Lệnh rải bị chặn bởi quy tắc an toàn: ${record.blockedReason || 'Thông số nước vượt ngưỡng'}`
-        );
+      if (
+        record?.safetyDecision === 'blocked' ||
+        record?.status === 'blocked_by_safety' ||
+        (record?.status === 'stopped' && record?.safetyDecision === 'blocked')
+      ) {
+        const reason =
+          record.safetyReason ||
+          record.stoppedReason ||
+          record.blockedReason ||
+          'Thông số nước vượt ngưỡng an toàn';
+        setScheduleActionError(`Lệnh rải bị chặn bởi quy tắc an toàn: ${reason}`);
+        openBlockedModal([reason]);
       } else {
         onShowToast?.(
           `Đã kích hoạt ${sched.name} (${Number(sched.feedAmountKg).toFixed(1)} kg).`,
@@ -268,7 +416,13 @@ export const ScheduleView = ({
       await loadPondScheduleData();
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      setScheduleActionError(getErrorMessage(err, 'Không thể kích hoạt cữ cho ăn.'));
+      if (err?.response?.status === 422) {
+        const msg = getErrorMessage(err, 'Lệnh cho ăn bị Safety Rule Engine từ chối (HTTP 422).');
+        setScheduleActionError(msg);
+        openBlockedModal([msg]);
+      } else {
+        setScheduleActionError(getErrorMessage(err, 'Không thể kích hoạt cữ cho ăn.'));
+      }
     }
   };
 
@@ -425,6 +579,178 @@ export const ScheduleView = ({
           </div>
         </div>
       </section>
+
+      {/* 1.5. DỰ BÁO XU HƯỚNG DO 1-2H & KHUYẾN NGHỊ AI (XGBOOST + TREESHAP) + GỢI Ý SINH HỌC */}
+      {predictedTrends && (
+        <section
+          className={`rounded-2xl border p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-2xs ${
+            predictedTrends.riskLevel === 'CRITICAL'
+              ? 'bg-[#FFF8F8] border-[#BA1A1A]/40 text-[#93000A]'
+              : predictedTrends.riskLevel === 'WARNING'
+              ? 'bg-amber-50 border-amber-300 text-[#92400E]'
+              : 'bg-[#F0FDF4] border-[#7CF994] text-[#005320]'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                predictedTrends.riskLevel === 'CRITICAL'
+                  ? 'bg-[#BA1A1A] text-white'
+                  : predictedTrends.riskLevel === 'WARNING'
+                  ? 'bg-[#F59E0B] text-white'
+                  : 'bg-[#006E2D] text-white'
+              }`}
+            >
+              {predictedTrends.riskLevel === 'CRITICAL' || predictedTrends.riskLevel === 'WARNING' ? (
+                <AlertTriangle className="w-5 h-5" />
+              ) : (
+                <Activity className="w-5 h-5" />
+              )}
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-extrabold uppercase tracking-wide">
+                  Dự báo xu hướng Oxy hòa tan (DO) 1–2 giờ tới
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 border border-current/20 font-mono-num">
+                  {predictedTrends.riskLevel || 'NORMAL'} • {predictedTrends.adaptiveAction || 'MAINTAIN'}
+                </span>
+              </div>
+              <p className="text-xs leading-relaxed font-medium">{predictedTrends.recommendation}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 shrink-0 text-center font-mono-num">
+            <div className="px-3 py-2 rounded-xl bg-white/85 border border-black/10">
+              <div className="text-[10px] text-slate-500 font-sans font-bold">DO Hiện tại</div>
+              <div className="text-sm font-extrabold text-[#0B1C30]">
+                {predictedTrends.currentDo !== undefined && predictedTrends.currentDo !== null
+                  ? `${Number(predictedTrends.currentDo).toFixed(2)}`
+                  : '--'}
+              </div>
+            </div>
+            <div className="px-3 py-2 rounded-xl bg-white/85 border border-black/10">
+              <div className="text-[10px] text-slate-500 font-sans font-bold">Dự báo +1h</div>
+              <div className="text-sm font-extrabold text-[#006398]">
+                {predictedTrends.predictedDo1h !== undefined && predictedTrends.predictedDo1h !== null
+                  ? `${Number(predictedTrends.predictedDo1h).toFixed(2)}`
+                  : '--'}
+              </div>
+            </div>
+            <div className="px-3 py-2 rounded-xl bg-white/85 border border-black/10">
+              <div className="text-[10px] text-slate-500 font-sans font-bold">Dự báo +2h</div>
+              <div className="text-sm font-extrabold text-[#EA580C]">
+                {predictedTrends.predictedDo2h !== undefined && predictedTrends.predictedDo2h !== null
+                  ? `${Number(predictedTrends.predictedDo2h).toFixed(2)}`
+                  : '--'}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+        <div className="lg:col-span-7">
+          <AiRecommendationCard
+            recommendation={aiRecommendation}
+            onPredict={handlePredictAi}
+            onApply={handleApplyAiToSchedule}
+            isPredicting={isPredictingAi}
+            canApply={canEdit}
+          />
+        </div>
+
+        <section className="lg:col-span-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs flex flex-col justify-between gap-4">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Wand2 className="w-4 h-4 text-[#006398]" />
+                <h3 className="text-sm font-bold text-[#0B1C30]">
+                  Khuyến nghị Lịch ăn Sinh học
+                </h3>
+              </div>
+              {scheduleRecommendation?.hasActiveSeason && (
+                <span className="px-2.5 py-0.5 rounded-full bg-[#EFF4FF] text-[#006398] text-[10px] font-bold font-mono-num">
+                  DOC {scheduleRecommendation.daysOfCulture} ngày
+                </span>
+              )}
+            </div>
+
+            {!scheduleRecommendation ? (
+              <p className="text-xs text-slate-500 py-4 text-center">
+                Đang chờ dữ liệu khuyến nghị sinh học từ máy chủ...
+              </p>
+            ) : !scheduleRecommendation.hasActiveSeason ? (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 leading-relaxed">
+                {scheduleRecommendation.message ||
+                  'Ao chưa có vụ nuôi đang hoạt động (ACTIVE) để tính toán định mức sinh học.'}
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs">
+                <div className="grid grid-cols-2 gap-2.5 font-mono-num">
+                  <div className="p-3 rounded-xl bg-[#F8F9FF] border border-slate-200/80">
+                    <div className="text-[10px] font-sans text-slate-500 font-semibold">
+                      Sinh khối ước tính
+                    </div>
+                    <div className="text-base font-extrabold text-[#0B1C30] mt-0.5">
+                      {Number(scheduleRecommendation.estimatedBiomassKg || 0).toLocaleString('vi-VN')} kg
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      ABW: {scheduleRecommendation.estimatedAverageWeightG} g/con
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#FFF8F5] border border-[#FFDBCA]">
+                    <div className="text-[10px] font-sans text-[#9D4300] font-semibold">
+                      Định mức ngày chuẩn
+                    </div>
+                    <div className="text-base font-extrabold text-[#EA580C] mt-0.5">
+                      {scheduleRecommendation.feedLimits?.dailyDemandKg ?? 0} kg/ngày
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      Còn phép: {scheduleRecommendation.feedLimits?.remainingAllowanceTodayKg ?? 0} kg
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#EFF4FF]/70 border border-[#D3E4FE] space-y-1.5">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Khẩu phần gợi ý mỗi cữ:</span>
+                    <strong className="font-mono-num text-[#006398]">
+                      {scheduleRecommendation.scheduleRecommendation?.suggestedAmountPerMealKg ?? 0} kg/cữ
+                    </strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Khoảng an toàn mỗi cữ:</span>
+                    <span className="font-mono-num font-semibold text-[#0B1C30]">
+                      {scheduleRecommendation.scheduleRecommendation?.minSafeMealKg ?? 0} –{' '}
+                      {scheduleRecommendation.scheduleRecommendation?.maxSafeMealKg ?? 0} kg
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Số cữ khuyến nghị / ngày:</span>
+                    <span className="font-mono-num font-semibold text-[#0B1C30]">
+                      {scheduleRecommendation.scheduleRecommendation?.suggestedMealCount ?? 4} cữ
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {scheduleRecommendation?.hasActiveSeason && canEdit && (
+            <button
+              type="button"
+              onClick={handleApplyScheduleRecommendation}
+              className="w-full h-10 rounded-xl bg-[#006398] hover:bg-[#004e78] text-white text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+            >
+              <Wand2 className="w-4 h-4" />
+              <span>
+                Điền gợi ý ({scheduleRecommendation.scheduleRecommendation?.suggestedAmountPerMealKg ?? 0} kg/cữ) vào form
+              </span>
+            </button>
+          )}
+        </section>
+      </div>
 
       {/* 2. SCHEDULE CONFIGURATION CARDS */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4 shadow-2xs">
@@ -712,10 +1038,15 @@ export const ScheduleView = ({
                 const isEnabled = rule.isEnabled ?? rule.enabled;
                 const code = rule.code || rule.relayCode || 'RULE';
                 const title = rule.name || rule.title;
-                const reason =
-                  rule.action?.reason ||
-                  rule.description ||
-                  `Ngưỡng ${rule.condition?.parameter || ''} ${rule.condition?.operator || ''} ${rule.condition?.threshold ?? ''}`;
+                const conditionText = formatRuleCondition(rule.condition);
+                const actionDecision = rule.action?.decision || rule.action?.type || 'blocked';
+                const actionLabel =
+                  actionDecision === 'blocked'
+                    ? 'Cấm rải (BLOCKED)'
+                    : actionDecision === 'adjusted'
+                    ? 'Điều chỉnh giảm (ADJUSTED)'
+                    : actionDecision;
+                const reason = rule.action?.reason || rule.description || conditionText;
 
                 return (
                   <div
@@ -732,8 +1063,7 @@ export const ScheduleView = ({
                       <p className="text-xs text-slate-600 leading-relaxed">{reason}</p>
                       {rule.condition && (
                         <div className="font-mono-num text-xs font-semibold text-[#006398] pt-0.5">
-                          Điều kiện: {rule.condition.parameter} {rule.condition.operator}{' '}
-                          {rule.condition.threshold} → Hành động: {rule.action?.type || 'STOP_FEEDING'}
+                          Điều kiện: {conditionText} → Hành động: {actionLabel}
                         </div>
                       )}
                     </div>
@@ -825,6 +1155,11 @@ export const ScheduleView = ({
       </div>
 
       <ConfirmModal {...confirmProps} />
+      <SafetyBlockedModal
+        isOpen={isSafetyModalOpen}
+        onClose={() => setIsSafetyModalOpen(false)}
+        safetyResult={safetyEvaluation}
+      />
     </div>
   );
 };

@@ -109,11 +109,38 @@ export const FeederControlView = ({
       }
 
       // 1.2 Tạo bản ghi cho ăn & phát lệnh điều khiển qua MQTT tới thiết bị IoT
-      await feedingService.createRecord(selectedPond.id, {
+      const record = await feedingService.createRecord(selectedPond.id, {
         deviceId: feederDevice.id,
         requestedAmountKg: requestedAmount,
         source: 'manual',
       });
+
+      if (
+        record?.safetyDecision === 'blocked' ||
+        record?.status === 'blocked_by_safety' ||
+        (record?.status === 'stopped' && record?.safetyDecision === 'blocked')
+      ) {
+        const reasonText =
+          record.safetyReason ||
+          record.stoppedReason ||
+          record.blockedReason ||
+          'Chất lượng nước vượt ngưỡng an toàn.';
+        setSafetyEvaluation(
+          preview || {
+            decision: 'blocked',
+            reasons: [reasonText],
+            telemetrySnapshot: {
+              dissolvedOxygenMgL: selectedPond.do,
+              ph: selectedPond.ph,
+              temperatureC: selectedPond.temp,
+            },
+          }
+        );
+        setIsSafetyModalOpen(true);
+        setControlError(`Quy tắc an toàn từ chối lệnh cho ăn: ${reasonText}`);
+        await onRefreshData?.();
+        return;
+      }
 
       await onRefreshData?.();
       onShowToast?.(
@@ -121,7 +148,22 @@ export const FeederControlView = ({
         'success'
       );
     } catch (err) {
-      setControlError(getErrorMessage(err, 'Không thể thực hiện cữ cho ăn. Vui lòng kiểm tra kết nối thiết bị.'));
+      if (err?.response?.status === 422) {
+        const msg = getErrorMessage(err, 'Lệnh cho ăn bị Safety Rule Engine từ chối (HTTP 422).');
+        setSafetyEvaluation({
+          decision: 'blocked',
+          reasons: [msg],
+          telemetrySnapshot: {
+            dissolvedOxygenMgL: selectedPond.do,
+            ph: selectedPond.ph,
+            temperatureC: selectedPond.temp,
+          },
+        });
+        setIsSafetyModalOpen(true);
+        setControlError(msg);
+      } else {
+        setControlError(getErrorMessage(err, 'Không thể thực hiện cữ cho ăn. Vui lòng kiểm tra kết nối thiết bị.'));
+      }
     } finally {
       setIsStartingFeed(false);
     }

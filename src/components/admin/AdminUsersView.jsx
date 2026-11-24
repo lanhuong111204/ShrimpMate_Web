@@ -6,7 +6,8 @@ import {
   RotateCw, 
   AlertCircle, 
   CheckCircle2, 
-  Filter
+  Filter,
+  KeyRound
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -23,6 +24,7 @@ export const AdminUsersView = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successToast, setSuccessToast] = useState('');
+  const [fetchedAtMs, setFetchedAtMs] = useState(() => Date.now());
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -31,6 +33,7 @@ export const AdminUsersView = () => {
       const res = await adminService.getUsers();
       const list = Array.isArray(res) ? res : (res?.data || []);
       setUsers(list);
+      setFetchedAtMs(Date.now());
     } catch (err) {
       setErrorMessage(getErrorMessage(err, 'Lỗi nạp danh sách tài khoản!'));
     } finally {
@@ -73,6 +76,28 @@ export const AdminUsersView = () => {
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
       setErrorMessage(getErrorMessage(err, 'Không thể cập nhật trạng thái tài khoản!'));
+    }
+  };
+
+  // Mở khóa tài khoản bị khóa do đăng nhập sai nhiều lần (Brute-force Lockout)
+  const handleUnlockBruteForce = async (targetUser) => {
+    setErrorMessage('');
+    const ok = await confirm({
+      title: 'Mở khóa đăng nhập tài khoản',
+      message: `Xác nhận mở khóa đăng nhập cho [${targetUser.fullName || targetUser.email}]?`,
+      detail: 'Thao tác này sẽ xóa trạng thái khóa bảo vệ (isAdminLocked / lockedUntil) và đặt lại bộ đếm đăng nhập sai.',
+      confirmText: 'Mở khóa đăng nhập',
+      variant: 'success',
+    });
+    if (!ok) return;
+
+    try {
+      await adminService.unlockUser(targetUser.id);
+      setSuccessToast(`Đã mở khóa đăng nhập cho tài khoản [${targetUser.email}] thành công.`);
+      await fetchUsers();
+      setTimeout(() => setSuccessToast(''), 3000);
+    } catch (err) {
+      setErrorMessage(getErrorMessage(err, 'Không thể mở khóa đăng nhập cho tài khoản!'));
     }
   };
 
@@ -202,6 +227,10 @@ export const AdminUsersView = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredUsers.map((u) => {
                 const isSelf = u.id === currentAdmin?.id;
+                const isTempLocked = Boolean(
+                  u.lockedUntil && new Date(u.lockedUntil).getTime() > fetchedAtMs
+                );
+                const isBruteForceLocked = Boolean(u.isAdminLocked || isTempLocked);
                 return (
                   <tr key={u.id} className="hover:bg-[#F8F9FF] transition">
                     <td className="py-3.5 px-6 font-bold text-[#0B1C30]">
@@ -248,43 +277,66 @@ export const AdminUsersView = () => {
                     </td>
 
                     <td className="py-3.5 px-4 text-center font-mono-num">
-                      {u.isActive ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994]">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#006E2D]"></span>
-                          Hoạt động
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FFDAD6] text-[#BA1A1A] border border-[#BA1A1A]/30">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#BA1A1A]"></span>
-                          Bị khóa
-                        </span>
-                      )}
+                      <div className="flex flex-col items-center gap-1">
+                        {u.isActive ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E8F5E9] text-[#006E2D] border border-[#7CF994]">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#006E2D]"></span>
+                            Hoạt động
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FFDAD6] text-[#BA1A1A] border border-[#BA1A1A]/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#BA1A1A]"></span>
+                            Vô hiệu hóa
+                          </span>
+                        )}
+                        {u.isAdminLocked ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-[#BA1A1A] border border-red-200">
+                            Khóa nhập sai nhiều lần
+                          </span>
+                        ) : isTempLocked ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-[#9D4300] border border-amber-200">
+                            Tạm khóa đăng nhập
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
 
                     <td className="py-3.5 px-6 text-right">
-                      <button
-                        onClick={() => handleToggleStatus(u)}
-                        disabled={isSelf}
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 ml-auto transition cursor-pointer ${
-                          isSelf
-                            ? 'opacity-30 cursor-not-allowed border-slate-200 text-slate-400'
-                            : u.isActive
-                            ? 'border-[#FFDAD6] text-[#BA1A1A] hover:bg-[#FFDAD6]/40'
-                            : 'border-[#7CF994] text-[#006E2D] hover:bg-[#E8F5E9]'
-                        }`}
-                      >
-                        {u.isActive ? (
-                          <>
-                            <Lock className="w-3.5 h-3.5" />
-                            <span>Khóa</span>
-                          </>
-                        ) : (
-                          <>
-                            <Unlock className="w-3.5 h-3.5" />
-                            <span>Mở khóa</span>
-                          </>
+                      <div className="inline-flex items-center justify-end gap-2">
+                        {isBruteForceLocked && !isSelf && (
+                          <button
+                            onClick={() => handleUnlockBruteForce(u)}
+                            className="px-3 py-1.5 rounded-xl border border-[#7CF994] bg-[#E8F5E9] hover:bg-[#DCFCE7] text-[#006E2D] text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer"
+                            title="Xóa khóa brute-force để người dùng đăng nhập lại"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                            <span>Mở khóa đăng nhập</span>
+                          </button>
                         )}
-                      </button>
+                        <button
+                          onClick={() => handleToggleStatus(u)}
+                          disabled={isSelf}
+                          className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                            isSelf
+                              ? 'opacity-30 cursor-not-allowed border-slate-200 text-slate-400'
+                              : u.isActive
+                              ? 'border-[#FFDAD6] text-[#BA1A1A] hover:bg-[#FFDAD6]/40'
+                              : 'border-[#7CF994] text-[#006E2D] hover:bg-[#E8F5E9]'
+                          }`}
+                        >
+                          {u.isActive ? (
+                            <>
+                              <Lock className="w-3.5 h-3.5" />
+                              <span>Khóa</span>
+                            </>
+                          ) : (
+                            <>
+                              <Unlock className="w-3.5 h-3.5" />
+                              <span>Mở khóa</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

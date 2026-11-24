@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './contexts/useAuth';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { RoleRoute } from './components/common/RoleRoute';
 import { UnauthorizedView } from './components/common/UnauthorizedView';
@@ -17,6 +18,7 @@ import { FarmersManagementView } from './components/FarmersManagementView';
 import { ScadaLogsView } from './components/ScadaLogsView';
 import { IoTStationView } from './components/IoTStationView';
 import { EStopModal } from './components/EStopModal';
+import { CriticalAlertModal } from './components/common/CriticalAlertModal';
 import { Toast } from './components/Toast';
 import { AlertTriangle, X } from 'lucide-react';
 import { farmService } from './services/farmService';
@@ -30,6 +32,7 @@ import { alertService } from './services/alertService';
 import { socketService } from './services/socketService';
 import { getErrorMessage } from './services/apiClient';
 import { formatLogTimestamp, mapAlertToLogItem } from './utils/alertHelpers';
+import { playCriticalAlertBeep } from './utils/alertSound';
 
 const rememberSeenKey = (setRef, key) => {
   if (!key) return;
@@ -132,8 +135,17 @@ const SCADAAppContent = () => {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [dataError, setDataError] = useState('');
 
-  // Trạng thái dừng khẩn cấp E-Stop
+  // Trạng thái dừng khẩn cấp E-Stop & tiến độ rải cám live
   const [isEStopActive, setIsEStopActive] = useState(false);
+  const [stoppedDeviceId, setStoppedDeviceId] = useState(null);
+  const [liveFeedingProgress, setLiveFeedingProgress] = useState({});
+
+  // Modal cảnh báo khẩn cấp CRITICAL real-time + tắt tiếng còi
+  const [criticalAlert, setCriticalAlert] = useState(null);
+  const [isAlertSoundMuted, setIsAlertSoundMuted] = useState(
+    () => localStorage.getItem('shrimpmate_mute_critical_sound') === '1'
+  );
+  const isAlertSoundMutedRef = useRef(isAlertSoundMuted);
 
   // Thông báo Toast
   const [toastMessage, setToastMessage] = useState(null);
@@ -276,10 +288,6 @@ const SCADAAppContent = () => {
             feederDevice?.metadata?.maxHopperKg !== undefined
               ? Number(feederDevice.metadata.maxHopperKg)
               : 70;
-          const vfdFrequencyHz =
-            feederDevice?.metadata?.vfdFrequencyHz !== undefined
-              ? Number(feederDevice.metadata.vfdFrequencyHz)
-              : null;
 
           const nextSchedule = enabledSchedules[0] || null;
           const currentMeal = nextSchedule
@@ -327,7 +335,6 @@ const SCADAAppContent = () => {
             targetKg,
             hopperKg,
             maxHopperKg,
-            vfdFrequencyHz,
             schedules,
             records,
             devices: pondDevices,
@@ -402,15 +409,24 @@ const SCADAAppContent = () => {
   }, [role]);
 
   useEffect(() => {
+    isAlertSoundMutedRef.current = isAlertSoundMuted;
+  }, [isAlertSoundMuted]);
+
+  useEffect(() => {
     fetchAllRealDataRef.current = fetchAllRealData;
   }, [fetchAllRealData]);
 
   useEffect(() => {
-    fetchAllRealData(false);
+    const initTimer = setTimeout(() => {
+      void fetchAllRealData(false);
+    }, 0);
     const pollTimer = setInterval(() => {
-      fetchAllRealData(true);
+      void fetchAllRealData(true);
     }, 20000);
-    return () => clearInterval(pollTimer);
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(pollTimer);
+    };
   }, [fetchAllRealData]);
 
   const pondIdsKey = useMemo(() => allPonds.map((p) => p.id).join(','), [allPonds]);
@@ -470,6 +486,36 @@ const SCADAAppContent = () => {
 
       if (nextMode === 'emergency_stop') {
         setIsEStopActive(true);
+        if (payload.deviceId) {
+          setStoppedDeviceId(payload.deviceId);
+        }
+      }
+
+      if (payload.pondId && payload.pondId !== 'all') {
+        if (payload.status === 'completed' || payload.status === 'stopped') {
+          setLiveFeedingProgress((prev) => {
+            if (!prev[payload.pondId]) return prev;
+            const copy = { ...prev };
+            delete copy[payload.pondId];
+            return copy;
+          });
+        } else if (
+          payload.progressPercent !== undefined ||
+          payload.rpm !== undefined ||
+          payload.actualAmountKg !== undefined
+        ) {
+          setLiveFeedingProgress((prev) => ({
+            ...prev,
+            [payload.pondId]: {
+              progressPercent: payload.progressPercent ?? prev[payload.pondId]?.progressPercent,
+              rpm: payload.rpm ?? prev[payload.pondId]?.rpm,
+              actualAmountKg: payload.actualAmountKg ?? prev[payload.pondId]?.actualAmountKg,
+              requestedAmountKg:
+                payload.requestedAmountKg ?? prev[payload.pondId]?.requestedAmountKg,
+              updatedAt: Date.now(),
+            },
+          }));
+        }
       }
 
       const hasDeviceFields = Boolean(
@@ -607,6 +653,15 @@ const SCADAAppContent = () => {
         rememberSeenKey(seenCompletedIdsRef, dedupeKey);
       }
 
+      if (payload.pondId) {
+        setLiveFeedingProgress((prev) => {
+          if (!prev[payload.pondId]) return prev;
+          const copy = { ...prev };
+          delete copy[payload.pondId];
+          return copy;
+        });
+      }
+
       const amountText =
         payload.actualAmountKg !== undefined && payload.actualAmountKg !== null
           ? payload.actualAmountKg
@@ -619,6 +674,9 @@ const SCADAAppContent = () => {
       if (!payload) return;
       if (payload.mode === 'emergency_stop') {
         setIsEStopActive(true);
+        if (payload.deviceId) {
+          setStoppedDeviceId(payload.deviceId);
+        }
       }
 
       const matchesDevice = (dev) => {
@@ -691,13 +749,20 @@ const SCADAAppContent = () => {
       if (!alert.isBuffered && !isStatusTransition) {
         const sevNum = Number(alert.severity);
         const sevStr = String(alert.severity || '').toLowerCase();
-        const toastKind =
-          sevNum >= 3 || sevStr === 'critical'
-            ? 'alert'
-            : sevNum === 2 || sevStr === 'warning'
-              ? 'warning'
-              : 'info';
+        const isCritical = sevNum >= 3 || sevStr === 'critical';
+        const toastKind = isCritical
+          ? 'alert'
+          : sevNum === 2 || sevStr === 'warning'
+            ? 'warning'
+            : 'info';
         showToast(alert.message || mappedAlert.title, toastKind);
+
+        if (isCritical) {
+          setCriticalAlert(mappedAlert);
+          if (!isAlertSoundMutedRef.current) {
+            playCriticalAlertBeep();
+          }
+        }
       }
     });
 
@@ -742,9 +807,10 @@ const SCADAAppContent = () => {
 
   // Kích hoạt Dừng khẩn cấp (E-STOP)
   const handleEmergencyStop = async () => {
-    setIsEStopActive(true);
     const targetDeviceId =
-      activePond?.deviceId || filteredDevices.find((d) => d.type === 'feeder')?.id;
+      activePond?.deviceId || filteredDevices.find((d) => d.type === 'feeder')?.id || null;
+    setStoppedDeviceId(targetDeviceId);
+    setIsEStopActive(true);
     try {
       if (targetDeviceId) {
         await deviceService.emergencyStop(targetDeviceId);
@@ -783,6 +849,7 @@ const SCADAAppContent = () => {
 
   const handleResetEStop = async () => {
     setIsEStopActive(false);
+    setStoppedDeviceId(null);
     await fetchAllRealData(true);
     showToast('Hệ thống đã được khôi phục trạng thái vận hành an toàn.', 'success');
   };
@@ -874,18 +941,29 @@ const SCADAAppContent = () => {
     }
   };
 
-  const handleMuteAlarm = (pondId) => {
-    const target = allPonds.find((p) => p.id === pondId);
-    showToast(
-      `Đã tắt còi cảnh báo tại ${target?.code || 'ao nuôi'}. Vui lòng kiểm tra và nạp thêm cám vào phễu.`,
-      'info'
-    );
-  };
-
   const handleAlertsChanged = useCallback(() => {
     setAlertRefreshKey((prev) => prev + 1);
     fetchAllRealData(true);
   }, [fetchAllRealData]);
+
+  const handleToggleAlertMute = () => {
+    setIsAlertSoundMuted((prev) => {
+      const next = !prev;
+      localStorage.setItem('shrimpmate_mute_critical_sound', next ? '1' : '0');
+      return next;
+    });
+  };
+
+  const handleAcknowledgeCriticalAlert = async (alertId) => {
+    try {
+      await alertService.acknowledgeAlert(alertId);
+      setCriticalAlert(null);
+      handleAlertsChanged();
+      showToast('Đã xác nhận tiếp nhận xử lý cảnh báo nguy cấp.', 'info');
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Không thể tiếp nhận cảnh báo.'), 'alert');
+    }
+  };
 
   const handleNavigateTab = (tab, pondId) => {
     if (pondId !== undefined && pondId !== null) {
@@ -945,6 +1023,7 @@ const SCADAAppContent = () => {
                   farms={farms}
                   selectedFarmId={selectedFarmId}
                   ponds={filteredPonds}
+                  activePond={activePond}
                   logs={filteredLogs}
                   isLoading={isLoadingData}
                   alertRefreshKey={alertRefreshKey}
@@ -953,7 +1032,6 @@ const SCADAAppContent = () => {
                   onRefillFeed={handleRefillFeed}
                   onTogglePondPause={handleTogglePondPause}
                   onRunTestFeeder={handleRunTestFeeder}
-                  onMuteAlarm={handleMuteAlarm}
                   onShowToast={showToast}
                 />
               }
@@ -965,6 +1043,7 @@ const SCADAAppContent = () => {
                   farms={farms}
                   selectedFarmId={selectedFarmId}
                   ponds={filteredPonds}
+                  activePond={activePond}
                   logs={filteredLogs}
                   isLoading={isLoadingData}
                   alertRefreshKey={alertRefreshKey}
@@ -973,7 +1052,6 @@ const SCADAAppContent = () => {
                   onRefillFeed={handleRefillFeed}
                   onTogglePondPause={handleTogglePondPause}
                   onRunTestFeeder={handleRunTestFeeder}
-                  onMuteAlarm={handleMuteAlarm}
                   onShowToast={showToast}
                 />
               }
@@ -1004,6 +1082,7 @@ const SCADAAppContent = () => {
                 <FeederControlView
                   ponds={filteredPonds}
                   selectedPond={activePond}
+                  liveProgress={liveFeedingProgress[activePond?.id] || null}
                   onSelectPond={(id) => setSelectedPondId(id)}
                   onNavigateTab={handleNavigateTab}
                   onEmergencyStop={handleEmergencyStop}
@@ -1071,6 +1150,8 @@ const SCADAAppContent = () => {
                 <IoTStationView
                   devices={filteredDevices}
                   ponds={filteredPonds}
+                  selectedPond={activePond}
+                  onSelectPond={(id) => setSelectedPondId(id)}
                   onRefreshData={() => fetchAllRealData(true)}
                   onNavigateTab={handleNavigateTab}
                 />
@@ -1083,6 +1164,7 @@ const SCADAAppContent = () => {
                   farms={farms}
                   selectedFarmId={selectedFarmId}
                   ponds={filteredPonds}
+                  activePond={activePond}
                   logs={filteredLogs}
                   isLoading={isLoadingData}
                   alertRefreshKey={alertRefreshKey}
@@ -1091,7 +1173,6 @@ const SCADAAppContent = () => {
                   onRefillFeed={handleRefillFeed}
                   onTogglePondPause={handleTogglePondPause}
                   onRunTestFeeder={handleRunTestFeeder}
-                  onMuteAlarm={handleMuteAlarm}
                   onShowToast={showToast}
                 />
               }
@@ -1104,7 +1185,29 @@ const SCADAAppContent = () => {
       <EStopModal
         isOpen={isEStopActive}
         onReset={handleResetEStop}
-        activeDeviceId={activePond?.deviceId || activePond?.id}
+        activeDeviceId={
+          stoppedDeviceId ||
+          activePond?.deviceId ||
+          filteredDevices.find((d) => d.type === 'feeder')?.id ||
+          null
+        }
+      />
+
+      {/* Critical Real-Time Alert Modal */}
+      <CriticalAlertModal
+        alert={criticalAlert}
+        isMuted={isAlertSoundMuted}
+        onToggleMute={handleToggleAlertMute}
+        onAcknowledge={handleAcknowledgeCriticalAlert}
+        onOpenLogs={() => {
+          setCriticalAlert(null);
+          navigate('/logs?severity=3');
+        }}
+        onEmergencyStop={() => {
+          setCriticalAlert(null);
+          void handleEmergencyStop();
+        }}
+        onClose={() => setCriticalAlert(null)}
       />
 
       {/* Floating System Toast */}

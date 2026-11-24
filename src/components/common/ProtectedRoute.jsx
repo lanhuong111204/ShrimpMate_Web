@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { RotateCw, Waves } from 'lucide-react';
+import { useAuth } from '../../contexts/useAuth';
+import { RotateCw } from 'lucide-react';
 
 export const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading, sessionExpired } = useAuth();

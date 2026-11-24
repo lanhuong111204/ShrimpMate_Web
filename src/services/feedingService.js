@@ -78,9 +78,9 @@ export const feedingService = {
   },
 
   /**
-   * Cập nhật tiến trình cho ăn (hoàn thành, dừng, thất bại, thức ăn dư trên sàng)
+   * Cập nhật tiến trình cho ăn (hoàn thành, dừng, thất bại)
    * @param {string} recordId
-   * @param {Object} data - { status: 'completed'|'stopped'|'failed', actualAmountKg, leftoverPercent, appetiteLevel }
+   * @param {Object} data - { status: 'completed'|'stopped'|'failed', actualAmountKg, stoppedReason }
    */
   updateRecord: async (recordId, data) => {
     return await apiClient.patch(`/feeding-records/${recordId}`, data);

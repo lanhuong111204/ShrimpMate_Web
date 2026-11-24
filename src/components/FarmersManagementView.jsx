@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
   UserPlus, 
@@ -12,9 +12,6 @@ import {
   Key, 
   X, 
   Trash2, 
-  Warehouse, 
-  Waves,
-  Eye,
   Edit3
 } from 'lucide-react';
 import { farmerService } from '../services/farmerService';
@@ -70,7 +67,7 @@ export const FarmersManagementView = () => {
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
 
   // Tải danh sách Farmer
-  const fetchFarmers = async () => {
+  const fetchFarmers = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage('');
     try {
@@ -82,11 +79,14 @@ export const FarmersManagementView = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchFarmers();
-  }, []);
+    const timer = setTimeout(() => {
+      void fetchFarmers();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchFarmers]);
 
   // Xử lý tạo Farmer mới
   const handleCreateFarmer = async (e) => {
@@ -767,30 +767,45 @@ export const FarmersManagementView = () => {
                     </button>
                   )}
                 </div>
-                {currentAssignments.length === 0 ? (
+                {isLoadingAssignments ? (
+                  <div className="py-4 text-xs text-neutral-500 flex items-center gap-2 font-mono-num">
+                    <RotateCw className="w-3.5 h-3.5 animate-spin text-[#006398]" />
+                    <span>Đang tải danh sách phân công...</span>
+                  </div>
+                ) : currentAssignments.length === 0 ? (
                   <div className="text-xs text-neutral-400 italic">Chưa có phân công nào.</div>
                 ) : (
                   <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                    {currentAssignments.map((a) => (
-                      <div
-                        key={a.id}
-                        className="p-2.5 bg-neutral-50 rounded-xl border border-neutral-200 text-xs font-mono-num flex items-center justify-between"
-                      >
-                        <div>
-                          <span className="font-semibold text-neutral-800">
-                            {a.pondId ? `Ao ID: ${a.pondId.slice(0, 8)}...` : 'Toàn bộ trang trại'}
-                          </span>
-                          <span className="text-[10px] text-neutral-400 block">Trại: {a.farmId?.slice(0, 8)}...</span>
-                        </div>
-                        <button
-                          onClick={() => handleRevokeAssignment(a.id)}
-                          className="p-1 rounded text-red-500 hover:bg-red-50 transition cursor-pointer"
-                          title="Thu hồi phân công này"
+                    {currentAssignments.map((a) => {
+                      const pondLabel = a.pond
+                        ? `${a.pond.code || ''} – ${a.pond.name || ''}`.replace(/^ – | – $/g, '')
+                        : a.pondId
+                        ? `Ao ID: ${a.pondId.slice(0, 8)}...`
+                        : 'Toàn bộ trang trại';
+                      const farmLabel = a.farm?.name || (a.farmId ? `Trại ${a.farmId.slice(0, 8)}...` : '');
+                      return (
+                        <div
+                          key={a.id}
+                          className="p-2.5 bg-neutral-50 rounded-xl border border-neutral-200 text-xs font-mono-num flex items-center justify-between"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                          <div>
+                            <span className="font-semibold text-neutral-800">{pondLabel}</span>
+                            {farmLabel && (
+                              <span className="text-[10px] text-neutral-500 block font-sans">
+                                Trang trại: {farmLabel}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleRevokeAssignment(a.id)}
+                            className="p-1 rounded text-red-500 hover:bg-red-50 transition cursor-pointer"
+                            title="Thu hồi phân công này"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

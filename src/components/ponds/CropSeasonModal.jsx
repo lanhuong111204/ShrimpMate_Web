@@ -1,16 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   X, 
   Sprout, 
   RotateCw, 
   AlertCircle, 
   Calendar, 
-  Scale, 
-  TrendingUp, 
   CheckCircle2, 
   Plus, 
-  History,
-  Award
+  History
 } from 'lucide-react';
 import { cropSeasonService } from '../../services/cropSeasonService';
 import { getErrorMessage } from '../../services/apiClient';
@@ -29,7 +26,6 @@ export const CropSeasonModal = ({ isOpen, onClose, pond, onSuccess }) => {
   const [successMessage, setSuccessMessage] = useState('');
 
   // Form tạo vụ mới
-  const [showCreateForm, setShowCreateForm] = useState(false);
   const [name, setName] = useState('');
   const [stockingDate, setStockingDate] = useState('');
   const [initialCount, setInitialCount] = useState('150000');
@@ -38,7 +34,7 @@ export const CropSeasonModal = ({ isOpen, onClose, pond, onSuccess }) => {
   const [estimatedSurvivalRate, setEstimatedSurvivalRate] = useState('85.0');
 
   // Tải danh sách vụ nuôi
-  const fetchSeasons = async () => {
+  const fetchSeasons = useCallback(async () => {
     if (!pond?.id) return;
     setIsLoading(true);
     setErrorMessage('');
@@ -51,7 +47,6 @@ export const CropSeasonModal = ({ isOpen, onClose, pond, onSuccess }) => {
       setActiveSeason(active || null);
 
       if (active) {
-        setShowCreateForm(false);
         // Tải thống kê FCR cho vụ đang nuôi
         try {
           const stats = await cropSeasonService.getSeasonStatistics(active.id);
@@ -61,7 +56,6 @@ export const CropSeasonModal = ({ isOpen, onClose, pond, onSuccess }) => {
           setStatistics(null);
         }
       } else {
-        setShowCreateForm(true);
         // Điền ngày hôm nay làm mặc định
         const today = new Date().toISOString().split('T')[0];
         setStockingDate(today);
@@ -72,14 +66,16 @@ export const CropSeasonModal = ({ isOpen, onClose, pond, onSuccess }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [pond]);
 
   useEffect(() => {
-    if (isOpen && pond) {
-      fetchSeasons();
+    if (!isOpen || !pond) return undefined;
+    const timer = setTimeout(() => {
       setSuccessMessage('');
-    }
-  }, [isOpen, pond]);
+      void fetchSeasons();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [isOpen, pond, fetchSeasons]);
 
   if (!isOpen || !pond) return null;
 

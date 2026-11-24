@@ -1,8 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { authService } from '../services/authService';
 import { getAccessToken, getStoredUser, clearTokens } from '../services/apiClient';
-
-const AuthContext = createContext(null);
+import { AuthContext } from './useAuth';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => getStoredUser());
@@ -46,7 +45,9 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    verifySession();
+    const timer = setTimeout(() => {
+      void verifySession();
+    }, 0);
 
     // Lắng nghe sự kiện hết hạn phiên làm việc từ apiClient
     const handleAuthExpired = () => {
@@ -56,6 +57,7 @@ export const AuthProvider = ({ children }) => {
 
     window.addEventListener('shrimpmate:auth:expired', handleAuthExpired);
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('shrimpmate:auth:expired', handleAuthExpired);
     };
   }, [verifySession]);
@@ -132,13 +134,4 @@ export const AuthProvider = ({ children }) => {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// Custom Hook useAuth
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth phải được sử dụng bên trong AuthProvider');
-  }
-  return context;
-};
-
-export default AuthContext;
+export default AuthProvider;

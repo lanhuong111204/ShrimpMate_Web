@@ -11,16 +11,20 @@ export const FarmModal = ({ isOpen, onClose, farm = null, onSuccess }) => {
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    if (farm) {
-      setName(farm.name || '');
-      setAddress(farm.address || '');
-      setStatus(farm.status || 'active');
-    } else {
-      setName('');
-      setAddress('');
-      setStatus('active');
-    }
-    setErrorMessage('');
+    if (!isOpen) return undefined;
+    const timer = setTimeout(() => {
+      if (farm) {
+        setName(farm.name || '');
+        setAddress(farm.address || '');
+        setStatus(farm.status || 'active');
+      } else {
+        setName('');
+        setAddress('');
+        setStatus('active');
+      }
+      setErrorMessage('');
+    }, 0);
+    return () => clearTimeout(timer);
   }, [farm, isOpen]);
 
   if (!isOpen) return null;

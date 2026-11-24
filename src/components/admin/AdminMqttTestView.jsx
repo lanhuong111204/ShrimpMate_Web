@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import adminService from '../../services/adminService';
 import deviceService from '../../services/deviceService';
 import { getErrorMessage } from '../../services/apiClient';
@@ -49,7 +49,7 @@ export default function AdminMqttTestView() {
     ]);
   };
 
-  const fetchBrokerStatus = async () => {
+  const fetchBrokerStatus = useCallback(async () => {
     setLoadingStatus(true);
     try {
       const res = await adminService.getMqttStatus();
@@ -63,26 +63,29 @@ export default function AdminMqttTestView() {
     } finally {
       setLoadingStatus(false);
     }
-  };
+  }, []);
 
-  const loadFeederDevices = async () => {
+  const loadFeederDevices = useCallback(async () => {
     try {
       const res = await deviceService.getDevices();
       const list = Array.isArray(res) ? res : (res?.data || []);
       const feeders = list.filter((d) => d.type === 'feeder');
       setDevices(feeders);
-      if (feeders.length > 0 && !deviceUid) {
-        setDeviceUid(feeders[0].deviceUid);
+      if (feeders.length > 0) {
+        setDeviceUid((prev) => prev || feeders[0].deviceUid);
       }
     } catch (err) {
       addLog('ERROR', `Không thể tải danh sách máy cho ăn: ${getErrorMessage(err, 'Lỗi tải thiết bị.')}`);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchBrokerStatus();
-    loadFeederDevices();
-  }, []);
+    const timer = setTimeout(() => {
+      void fetchBrokerStatus();
+      void loadFeederDevices();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchBrokerStatus, loadFeederDevices]);
 
   const handleTestFeeder = async (e) => {
     e.preventDefault();
@@ -92,20 +95,20 @@ export default function AdminMqttTestView() {
       return;
     }
 
+    const numericPayload = {
+      feedAmountKg: Number(feedAmountKg) || 1.5,
+      spreadRateKgPerMinute: Number(spreadRateKgPerMinute) || 1.0,
+      durationSeconds: Number(durationSeconds) || 30,
+    };
+
     setSendingCommand(true);
     addLog('COMMAND', `Đang phát xung lệnh test FEEDER -> [${deviceUid.trim()}]`, {
-      feedAmountKg,
-      spreadRateKgPerMinute,
-      durationSeconds,
+      ...numericPayload,
       timestamp: new Date().toISOString()
     });
 
     try {
-      const res = await adminService.testFeederMqtt(deviceUid.trim(), {
-        feedAmountKg,
-        spreadRateKgPerMinute,
-        durationSeconds
-      });
+      const res = await adminService.testFeederMqtt(deviceUid.trim(), numericPayload);
 
       const resData = res.data || res;
       addLog('SUCCESS', `Máy [${deviceUid.trim()}] đã phản hồi lệnh MQTT thành công!`, resData);

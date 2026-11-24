@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, X, AlertOctagon, CheckCircle2 } from 'lucide-react';
+import { ShieldAlert, X } from 'lucide-react';
 
 export const SafetyBlockedModal = ({ isOpen, onClose, safetyResult }) => {
   if (!isOpen || !safetyResult) return null;

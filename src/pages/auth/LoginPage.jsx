@@ -15,7 +15,7 @@ import {
   ShieldAlert,
   AlertTriangle,
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import { getErrorMessage, parseLockoutError } from '../../services/apiClient';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
 

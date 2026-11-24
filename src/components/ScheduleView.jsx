@@ -14,7 +14,7 @@ import {
   Activity,
   Wand2,
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import { feedingService } from '../services/feedingService';
 import { safetyRuleService } from '../services/safetyRuleService';
 import { aiService } from '../services/aiService';
@@ -23,33 +23,7 @@ import { ConfirmModal } from './common/ConfirmModal';
 import { useConfirm } from '../hooks/useConfirm';
 import { AiRecommendationCard } from './ai/AiRecommendationCard';
 import { SafetyBlockedModal } from './feeder/SafetyBlockedModal';
-
-const RULE_FIELD_LABELS = {
-  dissolvedOxygenMgL: 'Oxy hòa tan (DO)',
-  ph: 'Độ pH',
-  temperatureC: 'Nhiệt độ nước',
-  ammoniaMgL: 'Khí độc NH₃',
-  salinityPpt: 'Độ mặn',
-  turbidityNtu: 'Độ đục',
-};
-
-const formatRuleCondition = (condition) => {
-  if (!condition || typeof condition !== 'object') return 'Không có điều kiện';
-  if (condition.checkDevice) {
-    return 'Kiểm tra trạng thái kết nối máy cho ăn / cảm biến';
-  }
-  if (Array.isArray(condition.or)) {
-    return condition.or.map((c) => formatRuleCondition(c)).join(' HOẶC ');
-  }
-  if (Array.isArray(condition.and)) {
-    return condition.and.map((c) => formatRuleCondition(c)).join(' VÀ ');
-  }
-  const fieldKey = condition.field || condition.parameter;
-  const fieldLabel = RULE_FIELD_LABELS[fieldKey] || fieldKey || 'Chỉ số';
-  const operator = condition.operator || '';
-  const threshold = condition.value ?? condition.threshold ?? '';
-  return `${fieldLabel} ${operator} ${threshold}`.trim();
-};
+import { formatRuleCondition } from '../utils/safetyRuleFormatters';
 
 const getLocalDateKey = (dateInput = new Date()) => {
   const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
@@ -154,7 +128,10 @@ export const ScheduleView = ({
   }, [selectedPond?.id]);
 
   useEffect(() => {
-    loadPondScheduleData();
+    const timer = setTimeout(() => {
+      void loadPondScheduleData();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [loadPondScheduleData]);
 
   // Empty state khi chưa có ao nuôi
@@ -205,12 +182,16 @@ export const ScheduleView = ({
     setIsSafetyModalOpen(true);
   };
 
-  const handlePredictAi = async () => {
+  const handlePredictAi = async (overrides = {}) => {
     if (!selectedPond?.id || isPredictingAi) return;
     setIsPredictingAi(true);
     try {
+      const payload =
+        overrides && typeof overrides === 'object' && !('nativeEvent' in overrides)
+          ? overrides
+          : {};
       const [predRes, trendsRes] = await Promise.allSettled([
-        aiService.predictFeed(selectedPond.id, {}),
+        aiService.predictFeed(selectedPond.id, payload),
         aiService.getPredictedTrends(selectedPond.id),
       ]);
       if (predRes.status === 'fulfilled' && predRes.value) {

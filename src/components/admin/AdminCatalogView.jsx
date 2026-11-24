@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Cpu, 
   Plus, 
@@ -42,7 +42,7 @@ export const AdminCatalogView = () => {
   const [editError, setEditError] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const fetchDevices = async () => {
+  const fetchDevices = useCallback(async () => {
     setErrorMessage('');
     try {
       const res = await deviceService.getDevices();
@@ -51,11 +51,14 @@ export const AdminCatalogView = () => {
     } catch (err) {
       setErrorMessage(getErrorMessage(err, 'Lỗi nạp danh mục thiết bị catalog!'));
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchDevices();
-  }, []);
+    const timer = setTimeout(() => {
+      void fetchDevices();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchDevices]);
 
   const handleCreateDevice = async (e) => {
     e.preventDefault();

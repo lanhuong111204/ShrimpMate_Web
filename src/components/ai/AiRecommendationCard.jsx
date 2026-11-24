@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Sparkles,
   TrendingUp,
@@ -7,6 +7,9 @@ import {
   RotateCw,
   ShieldAlert,
   CheckCircle2,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 const SAFETY_BADGE_MAP = {
@@ -24,6 +27,26 @@ const SAFETY_BADGE_MAP = {
   },
 };
 
+const EMPTY_WHAT_IF = {
+  doc: '',
+  avgWeightG: '',
+  doMin: '',
+  deltaTan: '',
+  morningRainMm: '',
+  prevFeedAmountKg: '',
+  waterChangeM3: '',
+};
+
+const WHAT_IF_FIELDS = [
+  { key: 'doc', label: 'Ngày nuôi (DOC)', step: '1', placeholder: 'VD: 45' },
+  { key: 'avgWeightG', label: 'Trọng lượng TB (g/con)', step: '0.1', placeholder: 'VD: 8.5' },
+  { key: 'doMin', label: 'DO thấp nhất (mg/L)', step: '0.1', placeholder: 'VD: 4.2' },
+  { key: 'deltaTan', label: 'ΔTAN (mg/L)', step: '0.01', placeholder: 'VD: 0.02' },
+  { key: 'morningRainMm', label: 'Mưa sáng (mm)', step: '0.5', placeholder: 'VD: 0' },
+  { key: 'prevFeedAmountKg', label: 'Cữ ăn trước (kg)', step: '0.5', placeholder: 'VD: 12' },
+  { key: 'waterChangeM3', label: 'Nước thay (m³)', step: '10', placeholder: 'VD: 0' },
+];
+
 export const AiRecommendationCard = ({
   recommendation,
   onPredict,
@@ -32,32 +55,117 @@ export const AiRecommendationCard = ({
   isApplying = false,
   canApply = true,
 }) => {
+  const [showWhatIf, setShowWhatIf] = useState(false);
+  const [whatIfValues, setWhatIfValues] = useState(EMPTY_WHAT_IF);
+
+  const buildPredictOverrides = () => {
+    const payload = {};
+    WHAT_IF_FIELDS.forEach(({ key }) => {
+      const raw = String(whatIfValues[key] ?? '').trim();
+      if (raw !== '') {
+        const num = Number(raw);
+        if (Number.isFinite(num)) {
+          payload[key] = num;
+        }
+      }
+    });
+    return payload;
+  };
+
+  const triggerPredict = () => {
+    onPredict?.(buildPredictOverrides());
+  };
+
+  const whatIfDrawer = (
+    <div className="border border-orange-200/80 rounded-xl bg-white/85 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setShowWhatIf((prev) => !prev)}
+        className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-bold text-[#9D4300] hover:bg-orange-50/70 transition cursor-pointer"
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          <span>Tùy chỉnh 7 thông số thử nghiệm (What-If)</span>
+        </span>
+        {showWhatIf ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
+
+      {showWhatIf && (
+        <div className="p-3.5 pt-2 border-t border-orange-100 space-y-3">
+          <p className="text-[11px] text-slate-500">
+            Bỏ trống để hệ thống tự trích xuất từ cảm biến &amp; vụ nuôi thực tế. Nhập giá trị để giả lập kịch bản.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            {WHAT_IF_FIELDS.map((f) => (
+              <div key={f.key}>
+                <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">
+                  {f.label}
+                </label>
+                <input
+                  type="number"
+                  step={f.step}
+                  placeholder={f.placeholder}
+                  value={whatIfValues[f.key]}
+                  onChange={(e) =>
+                    setWhatIfValues((prev) => ({ ...prev, [f.key]: e.target.value }))
+                  }
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-[#F8F9FF] text-xs font-mono-num text-[#0B1C30] focus:outline-none focus:border-[#EA580C]"
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setWhatIfValues(EMPTY_WHAT_IF)}
+              className="px-2.5 py-1 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+            >
+              Đặt lại mặc định
+            </button>
+            <button
+              type="button"
+              onClick={triggerPredict}
+              disabled={isPredicting}
+              className="px-3 py-1 rounded-lg bg-[#EA580C] hover:bg-[#C2410C] text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
+            >
+              Chạy thử với thông số này
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   if (!recommendation) {
     return (
       <div className="rounded-2xl border border-orange-200 bg-gradient-to-br from-[#FFF8F5] to-white p-5 shadow-2xs flex flex-col justify-between gap-4 h-full">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-[#EA580C] text-white flex items-center justify-center shrink-0 shadow-xs">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-[#0B1C30]">
-                Khuyến nghị Khẩu phần AI (XGBoost + TreeSHAP)
-              </h3>
-              <p className="text-xs text-slate-500">
-                Chưa có bản ghi dự báo AI gần đây cho ao nuôi này
-              </p>
+        <div className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-[#EA580C] text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#0B1C30]">
+                  Khuyến nghị Khẩu phần AI (XGBoost + TreeSHAP)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Chưa có bản ghi dự báo AI gần đây cho ao nuôi này
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <p className="text-xs text-slate-600 leading-relaxed bg-white/80 p-3.5 rounded-xl border border-orange-100">
-          Hệ thống AI phân tích 7 đặc trưng nông học & môi trường (DOC, ABW, DO min, ΔTAN, mưa sáng, lượng ăn cữ trước, lượng nước thay) kết hợp kiểm duyệt qua Safety Rule Engine.
-        </p>
+          <p className="text-xs text-slate-600 leading-relaxed bg-white/80 p-3.5 rounded-xl border border-orange-100">
+            Hệ thống AI phân tích 7 đặc trưng nông học &amp; môi trường (DOC, ABW, DO min, ΔTAN, mưa sáng, lượng ăn cữ trước, lượng nước thay) kết hợp kiểm duyệt qua Safety Rule Engine.
+          </p>
+
+          {whatIfDrawer}
+        </div>
 
         <button
           type="button"
-          onClick={onPredict}
+          onClick={triggerPredict}
           disabled={isPredicting}
           className="w-full h-10 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
         >
@@ -114,7 +222,7 @@ export const AiRecommendationCard = ({
             </span>
             <button
               type="button"
-              onClick={onPredict}
+              onClick={triggerPredict}
               disabled={isPredicting}
               className="h-7 px-2.5 rounded-lg border border-orange-200 bg-white hover:bg-orange-50 text-[#9D4300] text-[11px] font-bold inline-flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
               title="Chạy lại dự báo AI với số liệu mới nhất"
@@ -202,6 +310,8 @@ export const AiRecommendationCard = ({
             </div>
           </div>
         )}
+
+        {whatIfDrawer}
       </div>
 
       {/* Apply Button */}

@@ -21,16 +21,18 @@ export const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
   const [isTimerActive, setIsTimerActive] = useState(false);
 
   useEffect(() => {
-    let timer = null;
-    if (isTimerActive && countdown > 0) {
-      timer = setInterval(() => {
-        setCountdown((prev) => prev - 1);
-      }, 1000);
-    } else if (countdown === 0) {
-      setIsTimerActive(false);
-    }
+    if (!isTimerActive) return undefined;
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          setIsTimerActive(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
     return () => clearInterval(timer);
-  }, [isTimerActive, countdown]);
+  }, [isTimerActive]);
 
   if (!isOpen) return null;
 

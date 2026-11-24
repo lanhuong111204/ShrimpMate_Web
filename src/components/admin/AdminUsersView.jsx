@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Search, 
   Lock, 
@@ -10,7 +10,7 @@ import {
   KeyRound
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import { getErrorMessage } from '../../services/apiClient';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -26,7 +26,7 @@ export const AdminUsersView = () => {
   const [successToast, setSuccessToast] = useState('');
   const [fetchedAtMs, setFetchedAtMs] = useState(() => Date.now());
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage('');
     try {
@@ -39,11 +39,14 @@ export const AdminUsersView = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    const timer = setTimeout(() => {
+      void fetchUsers();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchUsers]);
 
   // Khóa / Mở khóa tài khoản
   const handleToggleStatus = async (targetUser) => {

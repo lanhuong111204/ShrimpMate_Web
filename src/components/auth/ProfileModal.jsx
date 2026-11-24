@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Phone, Mail, Shield, RotateCw, AlertCircle, CheckCircle2, Save } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import { getErrorMessage } from '../../services/apiClient';
 
 export const ProfileModal = ({ isOpen, onClose, onSuccess }) => {
@@ -13,12 +13,14 @@ export const ProfileModal = ({ isOpen, onClose, onSuccess }) => {
   const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    if (user) {
+    if (!user || !isOpen) return undefined;
+    const timer = setTimeout(() => {
       setFullName(user.fullName || '');
       setPhoneNumber(user.phoneNumber || '');
       setErrorMessage('');
       setSuccessMessage('');
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [user, isOpen]);
 
   if (!isOpen) return null;

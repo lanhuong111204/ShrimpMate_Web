@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   ShieldCheck, 
   Plus, 
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { safetyRuleService } from '../../services/safetyRuleService';
 import { getErrorMessage } from '../../services/apiClient';
+import { formatRuleCondition } from '../../utils/safetyRuleFormatters';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { useConfirm } from '../../hooks/useConfirm';
 
@@ -29,11 +30,12 @@ export const AdminSafetyRulesView = () => {
   const [operator, setOperator] = useState('<');
   const [value, setValue] = useState('3.5');
   const [decision, setDecision] = useState('blocked');
+  const [factor, setFactor] = useState('0.5');
   const [reason, setReason] = useState('');
   const [createError, setCreateError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchRules = async () => {
+  const fetchRules = useCallback(async () => {
     setErrorMessage('');
     try {
       const res = await safetyRuleService.getSafetyRules();
@@ -42,11 +44,14 @@ export const AdminSafetyRulesView = () => {
     } catch (err) {
       setErrorMessage(getErrorMessage(err, 'Lỗi nạp danh mục quy tắc an toàn!'));
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchRules();
-  }, []);
+    const timer = setTimeout(() => {
+      void fetchRules();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchRules]);
 
   const handleToggleRule = async (rule) => {
     const nextEnabled = !rule.isEnabled;
@@ -84,6 +89,7 @@ export const AdminSafetyRulesView = () => {
         },
         action: {
           decision,
+          ...(decision === 'adjusted' ? { factor: Number(factor) || 0.5 } : {}),
           reason: reason.trim(),
         },
       });
@@ -222,10 +228,10 @@ export const AdminSafetyRulesView = () => {
               </div>
 
               {/* Điều kiện */}
-              <div className="p-3 bg-[#F8F9FF] rounded-xl border border-slate-200/80 font-mono-num text-xs text-[#0B1C30] flex items-center justify-between">
-                <span className="text-slate-500">Điều kiện kích hoạt:</span>
-                <strong className="text-[#EA580C]">
-                  {rule.condition?.field} {rule.condition?.operator} {rule.condition?.value}
+              <div className="p-3 bg-[#F8F9FF] rounded-xl border border-slate-200/80 font-mono-num text-xs text-[#0B1C30] flex items-center justify-between gap-3">
+                <span className="text-slate-500 shrink-0">Điều kiện kích hoạt:</span>
+                <strong className="text-[#EA580C] text-right">
+                  {formatRuleCondition(rule.condition)}
                 </strong>
               </div>
 
@@ -306,10 +312,14 @@ export const AdminSafetyRulesView = () => {
                     onChange={(e) => setField(e.target.value)}
                     className="w-full px-2 py-2.5 text-xs bg-[#F8F9FF] border border-slate-200 rounded-xl focus:outline-none font-mono-num"
                   >
-                    <option value="dissolvedOxygenMgL">DO (Oxy)</option>
-                    <option value="ph">pH (Kiềm)</option>
-                    <option value="temperatureC">Nhiệt độ</option>
-                    <option value="ammoniaMgL">NH3</option>
+                    <option value="dissolvedOxygenMgL">DO (Oxy mg/L)</option>
+                    <option value="ph">pH</option>
+                    <option value="temperatureC">Nhiệt độ (°C)</option>
+                    <option value="ammoniaMgL">NH₃ (mg/L)</option>
+                    <option value="salinityPpt">Độ mặn (‰)</option>
+                    <option value="turbidityNtu">Độ đục (NTU)</option>
+                    <option value="deltaTan">Biến thiên ΔTAN</option>
+                    <option value="morningRainMm">Mưa sáng (mm)</option>
                   </select>
                 </div>
 
@@ -335,7 +345,7 @@ export const AdminSafetyRulesView = () => {
                   </label>
                   <input
                     type="number"
-                    step="0.1"
+                    step="0.01"
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
                     className="w-full px-2.5 py-2.5 text-xs bg-[#F8F9FF] border border-slate-200 rounded-xl focus:outline-none font-mono-num"
@@ -344,18 +354,37 @@ export const AdminSafetyRulesView = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#0B1C30] mb-1">
-                  Hành động khóa an toàn
-                </label>
-                <select
-                  value={decision}
-                  onChange={(e) => setDecision(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs bg-[#F8F9FF] border border-slate-200 rounded-xl focus:outline-none"
-                >
-                  <option value="blocked">Cấm xả thức ăn (Blocked - Không phát MQTT)</option>
-                  <option value="adjusted">Giảm định mức an toàn (Adjusted)</option>
-                </select>
+              <div className={decision === 'adjusted' ? 'grid grid-cols-2 gap-3' : ''}>
+                <div>
+                  <label className="block text-xs font-bold text-[#0B1C30] mb-1">
+                    Hành động khóa an toàn
+                  </label>
+                  <select
+                    value={decision}
+                    onChange={(e) => setDecision(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs bg-[#F8F9FF] border border-slate-200 rounded-xl focus:outline-none"
+                  >
+                    <option value="blocked">Cấm xả thức ăn (Blocked - Không phát MQTT)</option>
+                    <option value="adjusted">Giảm định mức an toàn (Adjusted)</option>
+                  </select>
+                </div>
+                {decision === 'adjusted' && (
+                  <div>
+                    <label className="block text-xs font-bold text-[#0B1C30] mb-1">
+                      Hệ số nhân khẩu phần (0.1–0.95)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min="0.1"
+                      max="0.95"
+                      value={factor}
+                      onChange={(e) => setFactor(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-xs bg-[#F8F9FF] border border-slate-200 rounded-xl focus:outline-none font-mono-num"
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               <div>

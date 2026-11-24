@@ -6,7 +6,8 @@ import {
   TrendingUp, 
   AlertTriangle, 
   WifiOff, 
-  RotateCw
+  RotateCw,
+  Sparkles
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { getErrorMessage } from '../../services/apiClient';
@@ -15,6 +16,7 @@ export const AdminOverviewView = () => {
   const [overview, setOverview] = useState(null);
   const [operational, setOperational] = useState(null);
   const [fcrReport, setFcrReport] = useState(null);
+  const [aiStatus, setAiStatus] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -26,14 +28,16 @@ export const AdminOverviewView = () => {
         adminService.getOverview(),
         adminService.getOperationalReport(),
         adminService.getFcrReport(),
+        adminService.getAiServiceStatus(),
       ]);
 
-      const [ovRes, opRes, fcrRes] = results;
+      const [ovRes, opRes, fcrRes, aiRes] = results;
       if (ovRes.status === 'fulfilled') setOverview(ovRes.value);
       if (opRes.status === 'fulfilled') setOperational(opRes.value);
       if (fcrRes.status === 'fulfilled') setFcrReport(fcrRes.value);
+      if (aiRes.status === 'fulfilled') setAiStatus(aiRes.value);
 
-      const firstErr = results.find((r) => r.status === 'rejected');
+      const firstErr = results.slice(0, 3).find((r) => r.status === 'rejected');
       if (firstErr) {
         setErrorMessage(getErrorMessage(firstErr.reason, 'Một số số liệu quản trị chưa thể tải từ máy chủ.'));
       }
@@ -259,6 +263,133 @@ export const AdminOverviewView = () => {
             )}
           </div>
         </div>
+      </div>
+
+      {/* 4. Trạng thái AI Microservice (XGBoost) & Báo cáo FCR liên ao */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              aiStatus?.status === 'ONLINE'
+                ? 'bg-[#E8F5E9] text-[#006E2D]'
+                : aiStatus?.status === 'DEGRADED'
+                ? 'bg-[#FEF3C7] text-[#B45309]'
+                : 'bg-[#FFDAD6] text-[#BA1A1A]'
+            }`}
+          >
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-bold text-xs uppercase text-[#0B1C30] tracking-wider">
+                Dịch vụ AI Microservice (XGBoost + TreeSHAP)
+              </h3>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono-num font-bold border ${
+                  aiStatus?.status === 'ONLINE'
+                    ? 'bg-[#E8F5E9] text-[#006E2D] border-[#7CF994]'
+                    : aiStatus?.status === 'DEGRADED'
+                    ? 'bg-[#FEF3C7] text-[#B45309] border-amber-300'
+                    : 'bg-[#FFDAD6] text-[#BA1A1A] border-[#BA1A1A]/30'
+                }`}
+              >
+                {aiStatus?.status || 'UNKNOWN'} • {aiStatus?.mode || 'N/A'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-600">
+              {aiStatus?.message || 'Đang kiểm tra trạng thái kết nối tới máy chủ suy luận AI...'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 text-xs font-mono-num shrink-0 bg-[#F8F9FF] px-4 py-2.5 rounded-xl border border-slate-200/80">
+          <div>
+            <span className="text-[10px] font-sans text-slate-400 block">Mô hình</span>
+            <strong className="text-[#0B1C30]">
+              {aiStatus?.modelName || '—'} {aiStatus?.modelVersion || ''}
+            </strong>
+          </div>
+          <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+          <div>
+            <span className="text-[10px] font-sans text-slate-400 block">Độ trễ / Endpoint</span>
+            <strong className="text-[#006398]">
+              {aiStatus?.latencyMs !== undefined ? `${aiStatus.latencyMs} ms` : '—'}
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. Bảng Hiệu suất FCR liên ao */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-[#EA580C]" />
+            <h3 className="font-bold text-xs uppercase text-[#0B1C30] tracking-wider">
+              Báo cáo hiệu suất chuyển đổi thức ăn (FCR) toàn hệ thống
+            </h3>
+          </div>
+          <span className="text-xs font-mono-num text-slate-500">
+            {fcrReport?.seasons?.length ?? 0} vụ nuôi được đánh giá
+          </span>
+        </div>
+
+        {!fcrReport?.seasons || fcrReport.seasons.length === 0 ? (
+          <div className="p-8 text-center text-xs text-slate-500">
+            Chưa có vụ nuôi nào có dữ liệu cho ăn để thống kê hệ số FCR.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-[#F8F9FF] border-b border-slate-200 text-[11px] uppercase text-slate-500 font-bold">
+                  <th className="py-3 px-4">Trang trại</th>
+                  <th className="py-3 px-4">Ao nuôi / Vụ nuôi</th>
+                  <th className="py-3 px-4 text-center">DOC</th>
+                  <th className="py-3 px-4 text-right">Tổng cám (kg)</th>
+                  <th className="py-3 px-4 text-right">Sinh khối (kg)</th>
+                  <th className="py-3 px-4 text-center">FCR</th>
+                  <th className="py-3 px-4 text-right">Đánh giá</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {fcrReport.seasons.map((s) => (
+                  <tr key={s.cropSeasonId} className="hover:bg-[#F8F9FF] transition">
+                    <td className="py-3 px-4 font-semibold text-[#006398]">{s.farmName}</td>
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-[#0B1C30]">{s.pondName}</div>
+                      <div className="text-[11px] text-slate-500">{s.seasonName}</div>
+                    </td>
+                    <td className="py-3 px-4 text-center font-mono-num font-bold">
+                      {s.daysOfCulture} ngày
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono-num">
+                      {Number(s.totalFeedConsumedKg || 0).toLocaleString('vi-VN')}
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono-num">
+                      {Number(s.estimatedCurrentBiomassKg || 0).toLocaleString('vi-VN')}
+                    </td>
+                    <td className="py-3 px-4 text-center font-mono-num font-extrabold text-[#EA580C]">
+                      {s.fcr ?? '—'}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          s.fcr !== null && s.fcr < 1.3
+                            ? 'bg-[#E8F5E9] text-[#006E2D]'
+                            : s.fcr !== null && s.fcr <= 1.5
+                            ? 'bg-[#EFF4FF] text-[#006398]'
+                            : 'bg-amber-100 text-[#9D4300]'
+                        }`}
+                      >
+                        {s.qualityRating}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

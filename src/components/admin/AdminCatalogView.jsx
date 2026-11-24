@@ -224,8 +224,7 @@ export const AdminCatalogView = () => {
             <option value="all">Tất cả ({devices.length})</option>
             <option value="feeder">Máy Cho Ăn (Feeder)</option>
             <option value="sensor_node">Trạm Cảm Biến (Sensor)</option>
-            <option value="camera">Camera AI</option>
-            <option value="edge_gateway">Edge Gateway</option>
+            <option value="edge_gateway">Bộ thu phát trung tâm (Edge Gateway)</option>
           </select>
         </div>
       </div>
@@ -359,7 +358,7 @@ export const AdminCatalogView = () => {
                   type="text"
                   value={deviceUid}
                   onChange={(e) => setDeviceUid(e.target.value.toUpperCase())}
-                  placeholder="Ví dụ: DEV-FEEDER-VN-003 hoặc CAM-02-A1"
+                  placeholder="Ví dụ: DEV-FEEDER-VN-003 hoặc DEV-SENSOR-VN-001"
                   className="w-full px-3.5 py-2.5 text-xs bg-[#F8F9FF] border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#EA580C]/20 focus:border-[#EA580C] font-mono-num uppercase"
                   required
                 />
@@ -391,8 +390,7 @@ export const AdminCatalogView = () => {
                   >
                     <option value="feeder">Máy Cho Ăn (Feeder)</option>
                     <option value="sensor_node">Trạm Cảm Biến</option>
-                    <option value="camera">Camera AI Sàng Ăn</option>
-                    <option value="edge_gateway">Edge Gateway</option>
+                    <option value="edge_gateway">Bộ thu phát trung tâm (Edge Gateway)</option>
                   </select>
                 </div>
 

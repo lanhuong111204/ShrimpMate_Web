@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { ChangePasswordModal } from './auth/ChangePasswordModal';
 import { ProfileModal } from './auth/ProfileModal';
+import { SystemClock } from './common/SystemClock';
 import { alertService } from '../services/alertService';
 
 const EMPTY_ALERT_SUMMARY = {
@@ -45,7 +46,6 @@ const normalizeAlertSummary = (res) => ({
 });
 
 export const Header = ({
-  currentTime,
   onEmergencyStop,
   onSync,
   isSyncing,
@@ -141,8 +141,8 @@ export const Header = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -268,7 +268,7 @@ export const Header = ({
           className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0B1C30] border border-slate-200 text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
         >
           <RotateCw className={`w-3.5 h-3.5 text-[#006398] ${isSyncing ? 'animate-spin text-[#EA580C]' : ''}`} />
-          <span className="font-mono-num">{currentTime}</span>
+          <SystemClock />
           <span className="hidden sm:inline text-slate-600">Đồng bộ</span>
         </button>
 

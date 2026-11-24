@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
@@ -14,7 +14,6 @@ import { ScheduleView } from './components/ScheduleView';
 import { FeederControlView } from './components/FeederControlView';
 import { PondsManagementView } from './components/PondsManagementView';
 import { FarmersManagementView } from './components/FarmersManagementView';
-import { CameraFisView } from './components/CameraFisView';
 import { ScadaLogsView } from './components/ScadaLogsView';
 import { IoTStationView } from './components/IoTStationView';
 import { EStopModal } from './components/EStopModal';
@@ -27,10 +26,63 @@ import { cropSeasonService } from './services/cropSeasonService';
 import { feedingService } from './services/feedingService';
 import { deviceService } from './services/deviceService';
 import { safetyRuleService } from './services/safetyRuleService';
-import { cameraFisService } from './services/cameraFisService';
 import { alertService } from './services/alertService';
+import { socketService } from './services/socketService';
 import { getErrorMessage } from './services/apiClient';
 import { formatLogTimestamp, mapAlertToLogItem } from './utils/alertHelpers';
+
+const rememberSeenKey = (setRef, key) => {
+  if (!key) return;
+  const set = setRef.current;
+  set.add(key);
+  if (set.size > 300) {
+    const oldest = set.values().next().value;
+    if (oldest !== undefined) set.delete(oldest);
+  }
+};
+
+const getLocalDateKey = (dateInput = new Date()) => {
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const summarizeFeedingRecords = (records = []) => {
+  const todayKey = getLocalDateKey(new Date());
+  const sprayedKg = parseFloat(
+    records
+      .filter((r) => {
+        const ts = r.startedAt || r.createdAt;
+        return (
+          ts &&
+          getLocalDateKey(ts) === todayKey &&
+          (r.status === 'completed' || r.status === 'running' || r.status === 'in_progress')
+        );
+      })
+      .reduce((sum, r) => sum + Number(r.actualAmountKg ?? r.requestedAmountKg ?? 0), 0)
+      .toFixed(1)
+  );
+
+  const sorted = [...records].sort(
+    (a, b) =>
+      new Date(b.createdAt || b.startedAt || 0).getTime() -
+      new Date(a.createdAt || a.startedAt || 0).getTime()
+  );
+  const latestRecord = sorted[0] || null;
+  const isFeeding = Boolean(
+    latestRecord &&
+      (latestRecord.status === 'running' || latestRecord.status === 'in_progress')
+  );
+
+  return {
+    sprayedKg,
+    isFeeding,
+    activeFeedingRecord: isFeeding ? latestRecord : null,
+  };
+};
 
 const calculateAgeDays = (stockingDate) => {
   if (!stockingDate) return null;
@@ -55,9 +107,6 @@ const SCADAAppContent = () => {
         return 'feeder';
       case '/schedule':
         return 'schedule';
-      case '/camera-fis':
-      case '/acoustics':
-        return 'camera-fis';
       case '/iot':
         return 'iot';
       case '/logs':
@@ -90,20 +139,14 @@ const SCADAAppContent = () => {
   const [toastMessage, setToastMessage] = useState(null);
   const [toastType, setToastType] = useState('info');
 
-  // Đồng hồ hệ thống
-  const [currentTime, setCurrentTime] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      const pad = (n) => n.toString().padStart(2, '0');
-      setCurrentTime(`${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`);
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const allPondsRef = useRef([]);
+  const pondIdSetRef = useRef(new Set());
+  const roleRef = useRef(role);
+  const seenAlertIdsRef = useRef(new Set());
+  const seenCompletedIdsRef = useRef(new Set());
+  const fetchAllRealDataRef = useRef(null);
 
   const showToast = useCallback((msg, type = 'info') => {
     setToastMessage(msg);
@@ -117,13 +160,13 @@ const SCADAAppContent = () => {
     setDataError('');
 
     try {
-      const canReadDevices = role === 'admin' || role === 'manager';
-      const canReadSafetyRules = role === 'admin';
+      const canReadDevices = true;
+      const canReadSafetyRules = role === 'admin' || role === 'farmer';
 
       const [farmsRes, devicesRes, rulesRes, alertsRes] = await Promise.allSettled([
         farmService.getFarms(1, 50),
-        canReadDevices ? deviceService.getDevices() : Promise.resolve([]),
-        canReadSafetyRules ? safetyRuleService.getSafetyRules() : Promise.resolve([]),
+        canReadDevices ? deviceService.getDevices().catch(() => []) : Promise.resolve([]),
+        canReadSafetyRules ? safetyRuleService.getSafetyRules().catch(() => []) : Promise.resolve([]),
         alertService.getAlerts({ limit: 100 }),
       ]);
 
@@ -191,22 +234,20 @@ const SCADAAppContent = () => {
 
       const rawPonds = pondsPerFarm.flat();
 
-      // Lấy dữ liệu vận hành thực tế (Telemetry, Vụ nuôi, Lịch ăn, Nhật ký cho ăn, Camera FIS) cho từng ao
+      // Lấy dữ liệu vận hành thực tế (Telemetry, Vụ nuôi, Lịch ăn, Nhật ký cho ăn) cho từng ao
       const enrichedPonds = await Promise.all(
         rawPonds.map(async (pond) => {
-          const [teleRes, seasonsRes, schedulesRes, recordsRes, fisRes] = await Promise.allSettled([
+          const [teleRes, seasonsRes, schedulesRes, recordsRes] = await Promise.allSettled([
             telemetryService.getLatestTelemetry(pond.id),
             cropSeasonService.getSeasonsByPond(pond.id),
             feedingService.getSchedules(pond.id),
             feedingService.getRecords(pond.id),
-            cameraFisService.getLatestFis(pond.id),
           ]);
 
           const telemetry = teleRes.status === 'fulfilled' ? teleRes.value : null;
           const seasonsVal = seasonsRes.status === 'fulfilled' ? seasonsRes.value : [];
           const schedulesVal = schedulesRes.status === 'fulfilled' ? schedulesRes.value : [];
           const recordsVal = recordsRes.status === 'fulfilled' ? recordsRes.value : [];
-          const fisVal = fisRes.status === 'fulfilled' ? fisRes.value : null;
 
           const hasTelemetry = Boolean(telemetry && telemetry.id);
           const seasons = Array.isArray(seasonsVal) ? seasonsVal : (seasonsVal?.data || []);
@@ -218,25 +259,14 @@ const SCADAAppContent = () => {
           const pondDevices = deviceList.filter((d) => d.pondId === pond.id);
           const feederDevice = pondDevices.find((d) => d.type === 'feeder') || null;
           const sensorDevice = pondDevices.find((d) => d.type === 'sensor_node') || null;
-          const cameraDevice = pondDevices.find((d) => d.type === 'camera') || null;
 
           const enabledSchedules = schedules.filter((s) => s.isEnabled !== false);
           const targetKg = parseFloat(
             enabledSchedules.reduce((sum, s) => sum + Number(s.feedAmountKg || 0), 0).toFixed(1)
           );
 
-          const todayStr = new Date().toISOString().slice(0, 10);
-
-          // Tính tổng lượng cám đã rải trong ngày hôm nay từ các bản ghi cho ăn thực tế
-          const sprayedKg = parseFloat(
-            records
-              .filter((r) => {
-                const recordDate = (r.startedAt || r.createdAt || '').slice(0, 10);
-                return recordDate === todayStr && (r.status === 'completed' || r.status === 'running');
-              })
-              .reduce((sum, r) => sum + Number(r.actualAmountKg ?? r.requestedAmountKg ?? 0), 0)
-              .toFixed(1)
-          );
+          // Tính tổng lượng cám đã rải trong ngày hôm nay & trạng thái đang cho ăn
+          const { sprayedKg, isFeeding, activeFeedingRecord } = summarizeFeedingRecords(records);
 
           const hopperKg =
             feederDevice?.metadata?.hopperKg !== undefined
@@ -256,25 +286,7 @@ const SCADAAppContent = () => {
             ? `${nextSchedule.name} (${String(nextSchedule.timeOfDay).slice(0, 5)})`
             : 'Chưa thiết lập lịch';
 
-          const fisLevel = fisVal?.hasData ? fisVal.status?.appetiteLevel : null;
-          const fisScore = fisVal?.hasData ? Number(fisVal.status?.fisScore) : null;
-          const fisLabel = fisVal?.hasData
-            ? fisVal.status?.appetiteLevelDescription || `Mức ${fisLevel}`
-            : 'Chưa có dữ liệu';
-
-          // Kiểm tra bản ghi cữ ăn mới nhất (trong vòng 15 phút gần nhất) có đang chạy không
-          const sortedRecords = [...records].sort(
-            (a, b) =>
-              new Date(b.createdAt || b.startedAt || 0).getTime() -
-              new Date(a.createdAt || a.startedAt || 0).getTime()
-          );
-          const latestRecord = sortedRecords[0] || null;
-          const isLatestRunning =
-            latestRecord &&
-            (latestRecord.status === 'running' || latestRecord.status === 'in_progress');
-
-          // Cữ ăn chỉ coi là đang diễn ra nếu bản ghi mới nhất thực sự đang chạy
-          const isFeeding = Boolean(isLatestRunning);
+          const ageDays = calculateAgeDays(activeSeason?.stockingDate);
 
           // Xác định trạng thái vận hành thực tế của ao
           let operationalStatus = pond.status || 'active';
@@ -293,13 +305,14 @@ const SCADAAppContent = () => {
             area: `${Number(pond.areaM2 || 0).toLocaleString('vi-VN')} m²`,
             status: operationalStatus,
             isFeeding,
-            activeFeedingRecord: isFeeding ? latestRecord : null,
+            activeFeedingRecord,
             dbStatus: pond.status || 'active',
             shrimpType: activeSeason?.name || 'Chưa khai báo vụ nuôi',
             stockingCount: activeSeason?.initialCount
               ? `${Number(activeSeason.initialCount).toLocaleString('vi-VN')} con`
               : 'Chưa thả giống',
-            ageDays: calculateAgeDays(activeSeason?.stockingDate),
+            ageDays,
+            doc: ageDays,
             activeSeason,
             hasTelemetry,
             telemetryMeasuredAt: hasTelemetry ? telemetry.measuredAt : null,
@@ -309,15 +322,6 @@ const SCADAAppContent = () => {
             salinity: hasTelemetry && telemetry.salinityPpt !== null ? Number(telemetry.salinityPpt) : null,
             nh3: hasTelemetry && telemetry.ammoniaMgL !== null ? Number(telemetry.ammoniaMgL) : null,
             turbidity: hasTelemetry && telemetry.turbidityNtu !== null ? Number(telemetry.turbidityNtu) : null,
-            airTemp: hasTelemetry && (telemetry.airTemperatureC ?? telemetry.airTemp ?? telemetry.air) !== undefined && (telemetry.airTemperatureC ?? telemetry.airTemp ?? telemetry.air) !== null
-              ? Number(telemetry.airTemperatureC ?? telemetry.airTemp ?? telemetry.air)
-              : 24.0,
-            humidity: hasTelemetry && (telemetry.humidityPercent ?? telemetry.humidity ?? telemetry.rhPercent ?? telemetry.rh) !== undefined && (telemetry.humidityPercent ?? telemetry.humidity ?? telemetry.rhPercent ?? telemetry.rh) !== null
-              ? Number(telemetry.humidityPercent ?? telemetry.humidity ?? telemetry.rhPercent ?? telemetry.rh)
-              : 40.0,
-            fisLevel,
-            fisScore,
-            fisLabel,
             currentMeal,
             sprayedKg,
             targetKg,
@@ -329,7 +333,6 @@ const SCADAAppContent = () => {
             devices: pondDevices,
             feederDevice,
             sensorDevice,
-            cameraDevice,
             deviceId: feederDevice?.id || null,
           };
         })
@@ -338,7 +341,10 @@ const SCADAAppContent = () => {
       // Gộp thêm lịch sử cho ăn thực tế & Safety Rule Engine của từng ao vào Nhật ký vận hành
       const feedingLogs = enrichedPonds.flatMap((pond) =>
         (pond.records || []).slice(0, 20).map((r) => {
-          const isBlocked = r.status === 'blocked_by_safety';
+          const isBlocked =
+            r.safetyDecision === 'blocked' ||
+            r.status === 'blocked_by_safety' ||
+            (r.status === 'stopped' && Boolean(r.safetyReason));
           const amount = r.actualAmountKg ?? r.requestedAmountKg ?? 0;
           const timeVal = r.createdAt || r.startedAt || r.updatedAt;
           return {
@@ -350,7 +356,7 @@ const SCADAAppContent = () => {
               ? `CHẶN CHO ĂN AN TOÀN • ${pond.code}`
               : `CHO ĂN ${String(r.source || 'MANUAL').toUpperCase()} • ${pond.code}`,
             message: isBlocked
-              ? r.blockedReason || `Safety Engine chặn lệnh xả ${amount} kg.`
+              ? r.safetyReason || r.stoppedReason || r.blockedReason || `Safety Engine chặn lệnh xả ${amount} kg.`
               : `Trạng thái: ${r.status || 'completed'} • Khối lượng: ${amount} kg.`,
             timestamp: formatLogTimestamp(timeVal),
             rawTime: new Date(timeVal || 0).getTime() || 0,
@@ -387,12 +393,329 @@ const SCADAAppContent = () => {
   }, [user, role]);
 
   useEffect(() => {
+    allPondsRef.current = allPonds;
+    pondIdSetRef.current = new Set(allPonds.map((p) => p.id));
+  }, [allPonds]);
+
+  useEffect(() => {
+    roleRef.current = role;
+  }, [role]);
+
+  useEffect(() => {
+    fetchAllRealDataRef.current = fetchAllRealData;
+  }, [fetchAllRealData]);
+
+  useEffect(() => {
     fetchAllRealData(false);
     const pollTimer = setInterval(() => {
       fetchAllRealData(true);
     }, 20000);
     return () => clearInterval(pollTimer);
   }, [fetchAllRealData]);
+
+  const pondIdsKey = useMemo(() => allPonds.map((p) => p.id).join(','), [allPonds]);
+
+  useEffect(() => {
+    if (!user) {
+      socketService.disconnect();
+      seenAlertIdsRef.current.clear();
+      seenCompletedIdsRef.current.clear();
+      return undefined;
+    }
+
+    socketService.connect();
+
+    const toNumOrKeep = (incoming, fallback) => {
+      if (incoming === undefined) return fallback;
+      if (incoming === null) return null;
+      const n = Number(incoming);
+      return Number.isFinite(n) ? n : fallback;
+    };
+
+    const unsubTelemetry = socketService.onTelemetry((payload) => {
+      if (!payload?.pondId) return;
+      setAllPonds((prev) =>
+        prev.map((pond) => {
+          if (pond.id !== payload.pondId) return pond;
+          return {
+            ...pond,
+            hasTelemetry: true,
+            telemetryMeasuredAt:
+              payload.measuredAt || payload.emittedAt || new Date().toISOString(),
+            do: toNumOrKeep(payload.dissolvedOxygenMgL ?? payload.do, pond.do),
+            ph: toNumOrKeep(payload.ph, pond.ph),
+            temp: toNumOrKeep(payload.temperatureC ?? payload.temp, pond.temp),
+            salinity: toNumOrKeep(payload.salinityPpt ?? payload.salinity, pond.salinity),
+            nh3: toNumOrKeep(payload.ammoniaMgL ?? payload.nh3, pond.nh3),
+            turbidity: toNumOrKeep(payload.turbidityNtu ?? payload.turbidity, pond.turbidity),
+          };
+        })
+      );
+    });
+
+    const DEVICE_STATUSES = new Set(['online', 'offline', 'error']);
+
+    const unsubFeederStatus = socketService.onFeederStatus((payload) => {
+      if (!payload) return;
+      const nextDeviceStatus = DEVICE_STATUSES.has(payload.deviceStatus)
+        ? payload.deviceStatus
+        : DEVICE_STATUSES.has(payload.status)
+          ? payload.status
+          : undefined;
+      const nextMode =
+        payload.mode ||
+        (payload.command === 'STOP' || payload.command === 'EMERGENCY_STOP'
+          ? 'emergency_stop'
+          : undefined);
+
+      if (nextMode === 'emergency_stop') {
+        setIsEStopActive(true);
+      }
+
+      const hasDeviceFields = Boolean(
+        nextDeviceStatus || nextMode || payload.hopperKg !== undefined
+      );
+
+      if (!hasDeviceFields && !payload.recordId) {
+        return;
+      }
+
+      const matchesFeeder = (dev) => {
+        if (!dev) return false;
+        if (payload.deviceId && dev.id === payload.deviceId) return true;
+        if (payload.deviceUid && dev.deviceUid === payload.deviceUid) return true;
+        return Boolean(
+          payload.pondId && dev.pondId === payload.pondId && dev.type === 'feeder'
+        );
+      };
+
+      const mergeFeeder = (dev) => ({
+        ...dev,
+        ...(nextDeviceStatus ? { status: nextDeviceStatus } : {}),
+        ...(nextMode ? { mode: nextMode } : {}),
+        ...(payload.hopperKg !== undefined
+          ? { metadata: { ...(dev.metadata || {}), hopperKg: Number(payload.hopperKg) } }
+          : {}),
+      });
+
+      if (hasDeviceFields) {
+        setDevices((prev) =>
+          prev.map((d) => (matchesFeeder(d) ? mergeFeeder(d) : d))
+        );
+      }
+
+      setAllPonds((prev) =>
+        prev.map((pond) => {
+          const pondMatch =
+            (payload.pondId && pond.id === payload.pondId) ||
+            matchesFeeder(pond.feederDevice);
+          if (!pondMatch) return pond;
+
+          let nextPond = pond;
+
+          if (pond.feederDevice && hasDeviceFields) {
+            const updatedFeeder = mergeFeeder(pond.feederDevice);
+            const nextHopper =
+              payload.hopperKg !== undefined ? Number(payload.hopperKg) : pond.hopperKg;
+            nextPond = {
+              ...nextPond,
+              feederDevice: updatedFeeder,
+              hopperKg: nextHopper,
+              devices: (pond.devices || []).map((d) =>
+                d.id === updatedFeeder.id ? updatedFeeder : d
+              ),
+            };
+          }
+
+          if (payload.recordId) {
+            const existingRecords = nextPond.records || [];
+            const hasRecord = existingRecords.some((r) => r.id === payload.recordId);
+            const recordPatch = {
+              ...(payload.status && !DEVICE_STATUSES.has(payload.status)
+                ? { status: payload.status }
+                : {}),
+              ...(payload.actualAmountKg !== undefined && payload.actualAmountKg !== null
+                ? { actualAmountKg: Number(payload.actualAmountKg) }
+                : {}),
+              ...(payload.requestedAmountKg !== undefined && payload.requestedAmountKg !== null
+                ? { requestedAmountKg: Number(payload.requestedAmountKg) }
+                : {}),
+              ...(payload.safetyDecision ? { safetyDecision: payload.safetyDecision } : {}),
+              ...(payload.stoppedReason !== undefined
+                ? { stoppedReason: payload.stoppedReason }
+                : {}),
+              ...(payload.finishedAt !== undefined ? { finishedAt: payload.finishedAt } : {}),
+            };
+
+            let nextRecords = existingRecords;
+            if (hasRecord) {
+              nextRecords = existingRecords.map((r) =>
+                r.id === payload.recordId ? { ...r, ...recordPatch } : r
+              );
+            } else if (payload.pondId && payload.pondId === pond.id) {
+              nextRecords = [
+                {
+                  id: payload.recordId,
+                  pondId: pond.id,
+                  scheduleId: payload.scheduleId || null,
+                  status: recordPatch.status || 'running',
+                  requestedAmountKg: recordPatch.requestedAmountKg ?? 0,
+                  actualAmountKg: recordPatch.actualAmountKg ?? null,
+                  safetyDecision: recordPatch.safetyDecision || null,
+                  stoppedReason: recordPatch.stoppedReason ?? null,
+                  finishedAt: recordPatch.finishedAt ?? null,
+                  createdAt: payload.emittedAt || new Date().toISOString(),
+                },
+                ...existingRecords,
+              ];
+            }
+
+            const {
+              sprayedKg: nextSprayedKg,
+              isFeeding: nextIsFeeding,
+              activeFeedingRecord: nextActiveFeedingRecord,
+            } = summarizeFeedingRecords(nextRecords);
+
+            nextPond = {
+              ...nextPond,
+              records: nextRecords,
+              sprayedKg: nextSprayedKg,
+              isFeeding: nextIsFeeding,
+              activeFeedingRecord: nextActiveFeedingRecord,
+            };
+          }
+
+          return nextPond;
+        })
+      );
+    });
+
+    const unsubFeedingCompleted = socketService.onFeedingCompleted((payload) => {
+      if (!payload) return;
+      const hasAccess =
+        roleRef.current === 'admin' ||
+        (payload.pondId && pondIdSetRef.current.has(payload.pondId));
+      if (!hasAccess) return;
+
+      const dedupeKey = String(
+        payload.recordId || payload.id || payload.emittedAt || ''
+      );
+      if (dedupeKey && seenCompletedIdsRef.current.has(dedupeKey)) {
+        return;
+      }
+      if (dedupeKey) {
+        rememberSeenKey(seenCompletedIdsRef, dedupeKey);
+      }
+
+      const amountText =
+        payload.actualAmountKg !== undefined && payload.actualAmountKg !== null
+          ? payload.actualAmountKg
+          : payload.requestedAmountKg ?? '';
+      showToast(`Cữ ăn hoàn tất: Đã rải ${amountText} kg`, 'success');
+      fetchAllRealDataRef.current?.(true);
+    });
+
+    const unsubDeviceStatus = socketService.onDeviceStatus((payload) => {
+      if (!payload) return;
+      if (payload.mode === 'emergency_stop') {
+        setIsEStopActive(true);
+      }
+
+      const matchesDevice = (dev) => {
+        if (!dev) return false;
+        if (payload.deviceId && dev.id === payload.deviceId) return true;
+        return Boolean(payload.deviceUid && dev.deviceUid === payload.deviceUid);
+      };
+
+      const mergeDevice = (dev) => ({
+        ...dev,
+        ...(payload.status ? { status: payload.status } : {}),
+        ...(payload.mode ? { mode: payload.mode } : {}),
+        ...(payload.lastSeenAt ? { lastSeenAt: payload.lastSeenAt } : {}),
+        ...(payload.rssi !== undefined
+          ? { metadata: { ...(dev.metadata || {}), rssiDbm: payload.rssi } }
+          : {}),
+      });
+
+      setDevices((prev) =>
+        prev.map((d) => (matchesDevice(d) ? mergeDevice(d) : d))
+      );
+
+      setAllPonds((prev) =>
+        prev.map((pond) => {
+          const hasMatch =
+            matchesDevice(pond.feederDevice) ||
+            matchesDevice(pond.sensorDevice) ||
+            (pond.devices || []).some(matchesDevice);
+          if (!hasMatch) return pond;
+          return {
+            ...pond,
+            feederDevice: matchesDevice(pond.feederDevice)
+              ? mergeDevice(pond.feederDevice)
+              : pond.feederDevice,
+            sensorDevice: matchesDevice(pond.sensorDevice)
+              ? mergeDevice(pond.sensorDevice)
+              : pond.sensorDevice,
+            devices: (pond.devices || []).map((d) =>
+              matchesDevice(d) ? mergeDevice(d) : d
+            ),
+          };
+        })
+      );
+    });
+
+    const unsubAlertNew = socketService.onAlertNew((alert) => {
+      if (!alert) return;
+      const hasAccess =
+        roleRef.current === 'admin' ||
+        (alert.pondId && pondIdSetRef.current.has(alert.pondId));
+      if (!hasAccess) return;
+
+      const isStatusTransition =
+        alert.status === 'acknowledged' || alert.status === 'resolved';
+
+      if (alert.id) {
+        const dedupeKey = isStatusTransition
+          ? `${alert.id}:${alert.status}`
+          : String(alert.id);
+        if (seenAlertIdsRef.current.has(dedupeKey)) {
+          return;
+        }
+        rememberSeenKey(seenAlertIdsRef, dedupeKey);
+      }
+
+      const mappedAlert = mapAlertToLogItem(alert);
+      setLogs((prev) => [mappedAlert, ...prev.filter((l) => l.id !== mappedAlert.id)]);
+      setAlertRefreshKey((prev) => prev + 1);
+
+      if (!alert.isBuffered && !isStatusTransition) {
+        const sevNum = Number(alert.severity);
+        const sevStr = String(alert.severity || '').toLowerCase();
+        const toastKind =
+          sevNum >= 3 || sevStr === 'critical'
+            ? 'alert'
+            : sevNum === 2 || sevStr === 'warning'
+              ? 'warning'
+              : 'info';
+        showToast(alert.message || mappedAlert.title, toastKind);
+      }
+    });
+
+    return () => {
+      unsubTelemetry();
+      unsubFeederStatus();
+      unsubFeedingCompleted();
+      unsubDeviceStatus();
+      unsubAlertNew();
+      socketService.disconnect();
+    };
+  }, [user, showToast]);
+
+  useEffect(() => {
+    if (!user) return;
+    const ids = pondIdsKey ? pondIdsKey.split(',').filter(Boolean) : [];
+    socketService.syncPondSubscriptions(ids);
+  }, [user, pondIdsKey]);
 
   // Lọc danh sách ao, thiết bị và nhật ký vận hành theo đúng trang trại đang chọn trên Header
   const filteredPonds =
@@ -420,24 +743,36 @@ const SCADAAppContent = () => {
   // Kích hoạt Dừng khẩn cấp (E-STOP)
   const handleEmergencyStop = async () => {
     setIsEStopActive(true);
+    const targetDeviceId =
+      activePond?.deviceId || filteredDevices.find((d) => d.type === 'feeder')?.id;
     try {
-      if (activePond?.deviceId) {
-        await deviceService.emergencyStop(activePond.deviceId);
+      if (targetDeviceId) {
+        await deviceService.emergencyStop(targetDeviceId);
       }
-      // Dừng ngay cữ ăn đang chạy của ao nếu có
       if (activePond?.activeFeedingRecord?.id) {
         await feedingService
-          .updateRecord(activePond.activeFeedingRecord.id, {
-            status: 'stopped',
-          })
+          .updateRecord(activePond.activeFeedingRecord.id, { status: 'stopped' })
           .catch(() => {});
       }
     } catch (err) {
-      showToast(getErrorMessage(err, 'Không thể gửi lệnh dừng khẩn cấp lên máy chủ Backend!'), 'alert');
+      const status = err?.response?.status;
+      if (status === 502 || status === 503) {
+        showToast(
+          getErrorMessage(
+            err,
+            'Đã kích hoạt dừng khẩn cấp trên hệ thống, nhưng MQTT Broker chưa kết nối để truyền lệnh xuống thiết bị.'
+          ),
+          'warning'
+        );
+      } else {
+        showToast(getErrorMessage(err, 'Không thể gửi lệnh dừng khẩn cấp lên máy chủ Backend!'), 'alert');
+      }
     }
+    const nowIso = new Date().toISOString();
     const newLog = {
       id: Date.now().toString(),
-      timestamp: currentTime,
+      timestamp: formatLogTimestamp(nowIso),
+      rawTime: Date.now(),
       title: 'DỪNG KHẨN CẤP TOÀN TRẠM',
       message: 'Người vận hành đã kích hoạt ngắt bảo vệ khẩn cấp hệ thống máy cho ăn.',
       type: 'alert',
@@ -565,7 +900,6 @@ const SCADAAppContent = () => {
     <div className="min-h-screen bg-[#F8F9FF] flex flex-col font-sans text-[#0B1C30] selection:bg-[#EA580C] selection:text-white">
       {/* 1. Header điều hướng */}
       <Header
-        currentTime={currentTime}
         onEmergencyStop={handleEmergencyStop}
         onSync={handleManualSync}
         isSyncing={isSyncing}
@@ -675,7 +1009,6 @@ const SCADAAppContent = () => {
                   onEmergencyStop={handleEmergencyStop}
                   onShowToast={showToast}
                   onRefreshData={() => fetchAllRealData(true)}
-                  currentTime={currentTime}
                 />
               }
             />
@@ -689,28 +1022,6 @@ const SCADAAppContent = () => {
                   safetyRules={safetyRules}
                   onRefreshData={() => fetchAllRealData(true)}
                   onShowToast={showToast}
-                />
-              }
-            />
-            <Route
-              path="/camera-fis"
-              element={
-                <CameraFisView
-                  ponds={filteredPonds}
-                  selectedPond={activePond}
-                  onSelectPond={(id) => setSelectedPondId(id)}
-                  onNavigateTab={handleNavigateTab}
-                />
-              }
-            />
-            <Route
-              path="/acoustics"
-              element={
-                <CameraFisView
-                  ponds={filteredPonds}
-                  selectedPond={activePond}
-                  onSelectPond={(id) => setSelectedPondId(id)}
-                  onNavigateTab={handleNavigateTab}
                 />
               }
             />

@@ -6,7 +6,7 @@ export const TAB_TYPES = {
   PONDS: 'ponds',
   FEEDER: 'feeder',
   SCHEDULE: 'schedule',
-  ACOUSTICS: 'acoustics',
+  FARMERS: 'farmers',
   IOT: 'iot',
   LOGS: 'logs',
 };

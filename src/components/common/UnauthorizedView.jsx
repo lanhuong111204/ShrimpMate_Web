@@ -37,8 +37,8 @@ export const UnauthorizedView = () => {
           </button>
 
           <button
-            onClick={() => {
-              logout();
+            onClick={async () => {
+              await logout();
               navigate('/login');
             }}
             className="h-10 px-4 rounded-xl bg-red-600/80 hover:bg-red-600 text-white text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer"

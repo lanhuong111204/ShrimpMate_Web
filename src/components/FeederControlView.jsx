@@ -17,6 +17,7 @@ import { safetyRuleService } from '../services/safetyRuleService';
 import { deviceService } from '../services/deviceService';
 import { getErrorMessage } from '../services/apiClient';
 import { SafetyBlockedModal } from './feeder/SafetyBlockedModal';
+import { SystemClock } from './common/SystemClock';
 
 export const FeederControlView = ({
   ponds = [],
@@ -26,7 +27,6 @@ export const FeederControlView = ({
   onEmergencyStop,
   onShowToast,
   onRefreshData,
-  currentTime,
 }) => {
   const feederDevice = selectedPond?.feederDevice || null;
   const hasFeeder = Boolean(feederDevice);
@@ -130,6 +130,10 @@ export const FeederControlView = ({
   // 2. DỪNG KHẨN CẤP (E-STOP)
   const handleTriggerEmergencyStop = async () => {
     setControlError('');
+    if (onEmergencyStop) {
+      await onEmergencyStop();
+      return;
+    }
     if (feederDevice?.id) {
       try {
         await deviceService.emergencyStop(feederDevice.id);
@@ -137,17 +141,6 @@ export const FeederControlView = ({
         setControlError(getErrorMessage(err, 'Không thể gửi lệnh dừng khẩn cấp lên máy chủ.'));
       }
     }
-    // Dừng cữ ăn đang chạy nếu có
-    if (selectedPond?.activeFeedingRecord?.id) {
-      try {
-        await feedingService.updateRecord(selectedPond.activeFeedingRecord.id, {
-          status: 'stopped',
-        });
-      } catch {
-        // ignore
-      }
-    }
-    onEmergencyStop?.();
   };
 
   // 3. CHUYỂN CHẾ ĐỘ TỰ ĐỘNG / THỦ CÔNG
@@ -464,7 +457,7 @@ export const FeederControlView = ({
               Firmware: <strong>{feederDevice?.firmwareVersion || '1.0.0'}</strong>
             </span>
             <span>
-              Đồng hồ: <strong className="font-mono-num">{currentTime}</strong>
+              Đồng hồ: <strong className="font-mono-num"><SystemClock /></strong>
             </span>
           </div>
         </div>
@@ -538,8 +531,7 @@ export const FeederControlView = ({
       <SafetyBlockedModal
         isOpen={isSafetyModalOpen}
         onClose={() => setIsSafetyModalOpen(false)}
-        evaluation={safetyEvaluation}
-        pond={selectedPond}
+        safetyResult={safetyEvaluation}
       />
     </div>
   );

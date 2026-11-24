@@ -27,6 +27,13 @@ export const adminService = {
     return await apiClient.get('/admin/reports/fcr');
   },
 
+  /**
+   * Kiểm tra trạng thái hoạt động của dịch vụ AI
+   */
+  getAiServiceStatus: async () => {
+    return await apiClient.get('/admin/ai-service-status');
+  },
+
   // ================= 2. QUẢN LÝ TÀI KHOẢN TOÀN HỆ THỐNG =================
   /**
    * Xem danh sách tất cả tài khoản trong hệ thống
@@ -42,6 +49,14 @@ export const adminService = {
    */
   updateUserStatus: async (id, isActive) => {
     return await apiClient.patch(`/auth/users/${id}/status`, { isActive });
+  },
+
+  /**
+   * Mở khóa tài khoản bị khóa do đăng nhập sai nhiều lần (ACCOUNT_PENDING_ADMIN_UNLOCK)
+   * @param {string} id
+   */
+  unlockUser: async (id) => {
+    return await apiClient.patch(`/auth/users/${id}/unlock`);
   },
 
   /**

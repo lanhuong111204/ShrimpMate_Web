@@ -14,6 +14,14 @@ export const feedingService = {
   },
 
   /**
+   * Lấy lịch cho ăn khuyến nghị từ hệ thống dựa trên vụ nuôi & môi trường
+   * @param {string} pondId
+   */
+  getScheduleRecommendation: async (pondId) => {
+    return await apiClient.get(`/ponds/${pondId}/feeding-schedules/recommendation`);
+  },
+
+  /**
    * Tạo lịch cho ăn tự động mới
    * @param {string} pondId
    * @param {Object} data - { name, timeOfDay, feedAmountKg, spreadRateKgPerMinute, daysOfWeek, isEnabled }

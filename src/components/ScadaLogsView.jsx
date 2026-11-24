@@ -493,9 +493,26 @@ export const ScadaLogsView = ({
 
                         <p className="text-slate-700 leading-relaxed">{item.message}</p>
 
+                        {((item.latestValue !== null && item.latestValue !== undefined) ||
+                          item.repeatCount > 1) && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {item.latestValue !== null && item.latestValue !== undefined && (
+                              <span className="px-2 py-0.5 rounded-full bg-white border border-slate-200 text-[#0B1C30] font-mono-num font-bold text-[10px]">
+                                Giá trị đo: {item.latestValue}
+                                {item.metadata?.unit ? ` ${item.metadata.unit}` : ''}
+                              </span>
+                            )}
+                            {item.repeatCount > 1 && (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-[#92400E] font-mono-num font-bold text-[10px]">
+                                Lặp lại lần #{item.repeatCount}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         {item.actionRecommendation && (
-                          <div className="inline-flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/80 border border-slate-200 text-[#0B1C30] text-[11px]">
-                            <Lightbulb className="w-3.5 h-3.5 text-[#EA580C] shrink-0 mt-0.5" />
+                          <div className="inline-flex items-start gap-1.5 px-2.5 py-2 rounded-lg bg-amber-50 border border-amber-200 text-[#92400E] text-[11px]">
+                            <Lightbulb className="w-3.5 h-3.5 text-[#D97706] shrink-0 mt-0.5" />
                             <span>
                               <strong>Khuyến nghị:</strong> {item.actionRecommendation}
                             </span>

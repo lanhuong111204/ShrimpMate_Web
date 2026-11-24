@@ -1,4 +1,4 @@
-import apiClient, { setTokens, setStoredUser, clearTokens } from './apiClient';
+import apiClient, { getAccessToken, setTokens, setStoredUser, clearTokens } from './apiClient';
 
 /**
  * Service xử lý toàn bộ các luồng API Xác thực & Người dùng (/auth)
@@ -160,10 +160,18 @@ export const authService = {
   },
 
   /**
-   * Đăng xuất hệ thống (xóa token cục bộ)
+   * Đăng xuất hệ thống (thu hồi token trên Backend và xóa token cục bộ)
    */
-  logout: () => {
-    clearTokens();
+  logout: async () => {
+    try {
+      if (getAccessToken()) {
+        await apiClient.post('/auth/logout');
+      }
+    } catch {
+      // ignore network/401 errors
+    } finally {
+      clearTokens();
+    }
   },
 };
 

@@ -6,7 +6,6 @@ import {
   Users, 
   Settings2, 
   Clock, 
-  Droplets, 
   Radio, 
   History,
   Shield,
@@ -108,25 +107,6 @@ export const Sidebar = ({
           </div>
         </button>
 
-        <button
-          onClick={() => onSelectTab('camera-fis')}
-          className={navItemClass(currentTab === 'camera-fis' || currentTab === 'acoustics')}
-        >
-          <div className="flex items-center gap-2.5">
-            <Droplets className="w-4 h-4 shrink-0" />
-            <span>Chỉ số Môi trường Nước</span>
-          </div>
-          <span
-            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-              currentTab === 'camera-fis' || currentTab === 'acoustics'
-                ? 'bg-white/20 text-white'
-                : 'bg-[#006398]/40 text-[#CCE5FF]'
-            }`}
-          >
-            8 Chỉ số
-          </span>
-        </button>
-
         <div className="pt-3.5 px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
           Quản lý & Hạ tầng
         </div>
@@ -149,7 +129,7 @@ export const Sidebar = ({
         >
           <div className="flex items-center gap-2.5">
             <Radio className="w-4 h-4 shrink-0" />
-            <span>Trạm thiết bị IoT</span>
+            <span>Giám sát Nước & Trạm IoT</span>
           </div>
         </button>
 

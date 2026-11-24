@@ -117,7 +117,12 @@ export const mapAlertToLogItem = (a) => {
     pondName: a.pond?.name || null,
     deviceName: a.device?.name || null,
     deviceUid: a.device?.deviceUid || null,
-    actionRecommendation: a.metadata?.actionRecommendation || null,
+    actionRecommendation:
+      a.aiRecommendation?.explanation || a.metadata?.actionRecommendation || null,
+    latestValue: a.metadata?.latestValue ?? null,
+    repeatCount: Number(a.metadata?.repeatCount || 0),
+    aiRecommendation: a.aiRecommendation || null,
+    metadata: a.metadata || null,
     status: a.status,
   };
 };

@@ -1,8 +1,11 @@
 export const NAV_ITEMS = [
-  { name: 'Tổng quan', path: '/', icon: 'LayoutDashboard' },
-  { name: 'Quản lý ao nuôi', path: '/ponds', icon: 'Fish' },
-  { name: 'Phân tích & Thống kê', path: '/analytics', icon: 'LineChart' },
-  { name: 'Cài đặt hệ thống', path: '/settings', icon: 'Settings' },
+  { name: 'Tổng quan trại nuôi', path: '/', icon: 'LayoutDashboard' },
+  { name: 'Trang trại & Ao nuôi', path: '/ponds', icon: 'Waves' },
+  { name: 'Điều khiển Máy cho ăn', path: '/feeder', icon: 'Settings2' },
+  { name: 'Lịch cho ăn tự động', path: '/schedule', icon: 'Clock' },
+  { name: 'Nhân sự & Phân quyền', path: '/farmers', icon: 'Users' },
+  { name: 'Giám sát Nước & Trạm IoT', path: '/iot', icon: 'Radio' },
+  { name: 'Nhật ký vận hành', path: '/logs', icon: 'History' },
 ];
 
 export const SYSTEM_INFO = {

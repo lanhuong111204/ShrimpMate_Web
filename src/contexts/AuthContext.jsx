@@ -7,11 +7,6 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => getStoredUser());
   const [isLoading, setIsLoading] = useState(true);
-  const [sessionExpired, setSessionExpired] = useState(false);
-
-  const clearSessionExpired = useCallback(() => {
-    setSessionExpired(false);
-  }, []);
 
   // Xác minh phiên làm việc với Backend khi tải ứng dụng
   const verifySession = useCallback(async () => {
@@ -25,20 +20,15 @@ export const AuthProvider = ({ children }) => {
     try {
       const currentUser = await authService.getMe();
       if (currentUser && currentUser.isActive) {
-        setSessionExpired(false);
         setUser(currentUser);
       } else {
         // Tài khoản bị khóa hoặc không hợp lệ
         clearTokens();
-        setSessionExpired(true);
         setUser(null);
       }
     } catch (error) {
       console.warn('Phiên đăng nhập hết hạn hoặc không hợp lệ:', error?.message);
       clearTokens();
-      if (error?.response?.status === 401 || error?.response?.status === 403) {
-        setSessionExpired(true);
-      }
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -50,7 +40,6 @@ export const AuthProvider = ({ children }) => {
 
     // Lắng nghe sự kiện hết hạn phiên làm việc từ apiClient
     const handleAuthExpired = () => {
-      setSessionExpired(true);
       setUser(null);
     };
 
@@ -62,7 +51,6 @@ export const AuthProvider = ({ children }) => {
 
   // Hành động Đăng nhập
   const login = async (identifier, password) => {
-    setSessionExpired(false);
     const data = await authService.login(identifier, password);
     setUser(data.user);
     return data;
@@ -70,20 +58,15 @@ export const AuthProvider = ({ children }) => {
 
   // Hành động Đăng ký Manager
   const register = async (formData) => {
-    setSessionExpired(false);
     const data = await authService.register(formData);
     setUser(data.user);
     return data;
   };
 
   // Hành động Đăng xuất
-  const logout = async () => {
-    try {
-      setSessionExpired(false);
-      await authService.logout();
-    } finally {
-      setUser(null);
-    }
+  const logout = () => {
+    authService.logout();
+    setUser(null);
   };
 
   // Cập nhật hồ sơ
@@ -116,8 +99,6 @@ export const AuthProvider = ({ children }) => {
     role,
     isAuthenticated,
     isLoading,
-    sessionExpired,
-    clearSessionExpired,
     isAdmin,
     isManager,
     isFarmer,

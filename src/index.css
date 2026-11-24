@@ -27,6 +27,30 @@
   height: 6px;
 }
 
+@keyframes feed-stripe {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 30px 0;
+  }
+}
+
+.animate-feed-stripes {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.25) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 255, 255, 0.25) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 1rem 1rem;
+  animation: feed-stripe 1s linear infinite;
+}
+
 ::-webkit-scrollbar-track {
   background: #f1f5f9;
 }

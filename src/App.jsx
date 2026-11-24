@@ -41,6 +41,49 @@ const rememberSeenKey = (setRef, key) => {
   }
 };
 
+const getLocalDateKey = (dateInput = new Date()) => {
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const summarizeFeedingRecords = (records = []) => {
+  const todayKey = getLocalDateKey(new Date());
+  const sprayedKg = parseFloat(
+    records
+      .filter((r) => {
+        const ts = r.startedAt || r.createdAt;
+        return (
+          ts &&
+          getLocalDateKey(ts) === todayKey &&
+          (r.status === 'completed' || r.status === 'running' || r.status === 'in_progress')
+        );
+      })
+      .reduce((sum, r) => sum + Number(r.actualAmountKg ?? r.requestedAmountKg ?? 0), 0)
+      .toFixed(1)
+  );
+
+  const sorted = [...records].sort(
+    (a, b) =>
+      new Date(b.createdAt || b.startedAt || 0).getTime() -
+      new Date(a.createdAt || a.startedAt || 0).getTime()
+  );
+  const latestRecord = sorted[0] || null;
+  const isFeeding = Boolean(
+    latestRecord &&
+      (latestRecord.status === 'running' || latestRecord.status === 'in_progress')
+  );
+
+  return {
+    sprayedKg,
+    isFeeding,
+    activeFeedingRecord: isFeeding ? latestRecord : null,
+  };
+};
+
 const calculateAgeDays = (stockingDate) => {
   if (!stockingDate) return null;
   const start = new Date(stockingDate);
@@ -222,13 +265,8 @@ const SCADAAppContent = () => {
             enabledSchedules.reduce((sum, s) => sum + Number(s.feedAmountKg || 0), 0).toFixed(1)
           );
 
-          // Tính tổng lượng cám đã rải từ các bản ghi cho ăn thực tế
-          const sprayedKg = parseFloat(
-            records
-              .filter((r) => r.status === 'completed' || r.status === 'running')
-              .reduce((sum, r) => sum + Number(r.actualAmountKg ?? r.requestedAmountKg ?? 0), 0)
-              .toFixed(1)
-          );
+          // Tính tổng lượng cám đã rải trong ngày hôm nay & trạng thái đang cho ăn
+          const { sprayedKg, isFeeding, activeFeedingRecord } = summarizeFeedingRecords(records);
 
           const hopperKg =
             feederDevice?.metadata?.hopperKg !== undefined
@@ -266,6 +304,8 @@ const SCADAAppContent = () => {
             areaM2: Number(pond.areaM2 || 0),
             area: `${Number(pond.areaM2 || 0).toLocaleString('vi-VN')} m²`,
             status: operationalStatus,
+            isFeeding,
+            activeFeedingRecord,
             dbStatus: pond.status || 'active',
             shrimpType: activeSeason?.name || 'Chưa khai báo vụ nuôi',
             stockingCount: activeSeason?.initialCount
@@ -530,20 +570,18 @@ const SCADAAppContent = () => {
               ];
             }
 
-            const nextSprayedKg = parseFloat(
-              nextRecords
-                .filter((r) => r.status === 'completed' || r.status === 'running')
-                .reduce(
-                  (sum, r) => sum + Number(r.actualAmountKg ?? r.requestedAmountKg ?? 0),
-                  0
-                )
-                .toFixed(1)
-            );
+            const {
+              sprayedKg: nextSprayedKg,
+              isFeeding: nextIsFeeding,
+              activeFeedingRecord: nextActiveFeedingRecord,
+            } = summarizeFeedingRecords(nextRecords);
 
             nextPond = {
               ...nextPond,
               records: nextRecords,
               sprayedKg: nextSprayedKg,
+              isFeeding: nextIsFeeding,
+              activeFeedingRecord: nextActiveFeedingRecord,
             };
           }
 
@@ -710,6 +748,11 @@ const SCADAAppContent = () => {
     try {
       if (targetDeviceId) {
         await deviceService.emergencyStop(targetDeviceId);
+      }
+      if (activePond?.activeFeedingRecord?.id) {
+        await feedingService
+          .updateRecord(activePond.activeFeedingRecord.id, { status: 'stopped' })
+          .catch(() => {});
       }
     } catch (err) {
       const status = err?.response?.status;

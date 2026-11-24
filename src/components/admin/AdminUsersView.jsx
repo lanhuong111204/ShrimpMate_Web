@@ -24,6 +24,7 @@ export const AdminUsersView = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successToast, setSuccessToast] = useState('');
+  const [fetchedAtMs, setFetchedAtMs] = useState(() => Date.now());
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -32,6 +33,7 @@ export const AdminUsersView = () => {
       const res = await adminService.getUsers();
       const list = Array.isArray(res) ? res : (res?.data || []);
       setUsers(list);
+      setFetchedAtMs(Date.now());
     } catch (err) {
       setErrorMessage(getErrorMessage(err, 'Lỗi nạp danh sách tài khoản!'));
     } finally {
@@ -226,7 +228,7 @@ export const AdminUsersView = () => {
               {filteredUsers.map((u) => {
                 const isSelf = u.id === currentAdmin?.id;
                 const isTempLocked = Boolean(
-                  u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now()
+                  u.lockedUntil && new Date(u.lockedUntil).getTime() > fetchedAtMs
                 );
                 const isBruteForceLocked = Boolean(u.isAdminLocked || isTempLocked);
                 return (

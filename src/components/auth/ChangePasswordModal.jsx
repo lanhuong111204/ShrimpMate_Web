@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Lock, Eye, EyeOff, RotateCw, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import { getErrorMessage } from '../../services/apiClient';
 
 export const ChangePasswordModal = ({ isOpen, onClose, onSuccess }) => {

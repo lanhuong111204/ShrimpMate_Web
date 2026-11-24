@@ -15,7 +15,7 @@ import {
   CheckCircle2,
   Clock,
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import { ChangePasswordModal } from './auth/ChangePasswordModal';
 import { ProfileModal } from './auth/ProfileModal';
 import { SystemClock } from './common/SystemClock';

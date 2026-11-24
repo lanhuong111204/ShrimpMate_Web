@@ -5,6 +5,7 @@ import { getErrorMessage } from '../services/apiClient';
 
 export const EStopModal = ({ isOpen, onReset, activeDeviceId = null }) => {
   const [isResetting, setIsResetting] = useState(false);
+  const [resetMode, setResetMode] = useState('automatic');
   const [errorMessage, setErrorMessage] = useState('');
 
   if (!isOpen) return null;
@@ -13,9 +14,8 @@ export const EStopModal = ({ isOpen, onReset, activeDeviceId = null }) => {
     setIsResetting(true);
     setErrorMessage('');
     try {
-      // Nếu có deviceId, cập nhật chế độ thiết bị về manual
       if (activeDeviceId) {
-        await deviceService.updateDevice(activeDeviceId, { mode: 'manual' });
+        await deviceService.updateDevice(activeDeviceId, { mode: resetMode });
       }
       onReset?.();
     } catch (err) {
@@ -44,22 +44,22 @@ export const EStopModal = ({ isOpen, onReset, activeDeviceId = null }) => {
 
         <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs font-mono-num space-y-2 text-neutral-800">
           <div className="flex items-center justify-between font-bold text-red-700">
-            <span>TRẠNG THÁI SCADA & MQTT:</span>
+            <span>TRẠNG THÁI SCADA &amp; MQTT:</span>
             <span>CÁCH LY TOÀN BỘ RƠ-LE</span>
           </div>
           <p className="text-neutral-600 font-sans leading-relaxed">
-            Hệ thống đã phát lệnh ngắt cấp 1 (Emergency Stop Trip) qua MQTT đến máy cho ăn và tủ biến tần bờ ao. Toàn bộ mâm
-            quay, phễu rung và motor cấp liệu đã ngừng xả cám ngay lập tức để bảo vệ đàn tôm.
+            Hệ thống đã phát lệnh ngắt khẩn cấp (Emergency Stop) qua MQTT đến tủ điều khiển máy cho ăn bờ ao. Toàn bộ
+            mâm rải, phễu rung và motor cấp liệu đã ngừng xả cám ngay lập tức để bảo vệ đàn tôm.
           </p>
           <div className="pt-2 border-t border-red-200/80 grid grid-cols-2 gap-2 text-[11px]">
             <div>• Rơ-le mâm rải: <strong>NGẮT (TRIP)</strong></div>
             <div>• Motor phễu rung: <strong>NGẮT (OPEN)</strong></div>
-            <div>• Biến tần VFD: <strong>DISARMED (0Hz)</strong></div>
-            <div>• Lệnh MQTT: <strong>SENT (emergency_stop)</strong></div>
+            <div>• Chế độ thiết bị: <strong>EMERGENCY_STOP</strong></div>
+            <div>• Lệnh MQTT: <strong>SENT (EMERGENCY_STOP)</strong></div>
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           {errorMessage && (
             <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -78,6 +78,39 @@ export const EStopModal = ({ isOpen, onReset, activeDeviceId = null }) => {
               </div>
             </div>
           )}
+
+          {activeDeviceId && (
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+              <label className="block text-[11px] font-bold text-slate-700">
+                Chế độ sau khi khôi phục máy cho ăn:
+              </label>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setResetMode('automatic')}
+                  className={`py-2 px-3 rounded-lg border font-bold cursor-pointer transition ${
+                    resetMode === 'automatic'
+                      ? 'bg-[#006E2D] text-white border-[#006E2D]'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Tự động (Automatic)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResetMode('manual')}
+                  className={`py-2 px-3 rounded-lg border font-bold cursor-pointer transition ${
+                    resetMode === 'manual'
+                      ? 'bg-[#EA580C] text-white border-[#EA580C]'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Thủ công (Manual)
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="text-xs text-neutral-500">
             Kỹ sư vận hành cần kiểm tra hiện trường ao nuôi trước khi khôi phục hệ thống SCADA.
           </div>
@@ -87,7 +120,7 @@ export const EStopModal = ({ isOpen, onReset, activeDeviceId = null }) => {
             className="w-full py-3 px-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 active:scale-[0.98] text-white font-mono-num text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-sm disabled:opacity-50"
           >
             {isResetting ? <RotateCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            <span>XÁC NHẬN AN TOÀN & KHÔI PHỤC HỆ THỐNG</span>
+            <span>XÁC NHẬN AN TOÀN &amp; KHÔI PHỤC HỆ THỐNG</span>
           </button>
         </div>
       </div>

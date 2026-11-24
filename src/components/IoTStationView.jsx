@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Wifi,
   BatteryCharging,
@@ -7,15 +7,23 @@ import {
   Cpu,
   RotateCcw,
   Building2,
+  Waves,
 } from 'lucide-react';
 import { evaluateWaterMetric } from '../utils/waterQualityThresholds';
+import { WaterQualityGaugeGrid } from './common/WaterQualityGaugeGrid';
+import { TelemetryHistoryChart } from './common/TelemetryHistoryChart';
 
 export const IoTStationView = ({
   devices = [],
   ponds = [],
+  selectedPond = null,
+  onSelectPond,
   onRefreshData,
   onNavigateTab,
 }) => {
+  const [localPondId, setLocalPondId] = useState(null);
+  const currentPond =
+    ponds.find((p) => p.id === (localPondId || selectedPond?.id)) || ponds[0] || null;
   const pondMap = new Map(ponds.map((p) => [p.id, p]));
   const onlineCount = devices.filter((d) => d.status === 'online').length;
 
@@ -78,6 +86,44 @@ export const IoTStationView = ({
           )}
         </div>
       </div>
+
+      {/* 6 Vòng tròn SVG chất lượng nước & Biểu đồ lịch sử */}
+      {currentPond && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Waves className="w-4 h-4 text-[#006398]" />
+                <h2 className="text-sm font-bold text-[#0B1C30]">
+                  Giám sát 6 chỉ số nước (SVG Gauges) — {currentPond.code} ({currentPond.name})
+                </h2>
+              </div>
+              {ponds.length > 1 && (
+                <select
+                  value={currentPond.id}
+                  onChange={(e) => {
+                    setLocalPondId(e.target.value);
+                    onSelectPond?.(e.target.value);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-[#EFF4FF] border border-[#D3E4FE] text-xs font-bold text-[#0B1C30] focus:outline-none cursor-pointer"
+                >
+                  {ponds.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      [{p.farmName}] {p.code} – {p.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <WaterQualityGaugeGrid pond={currentPond} />
+          </div>
+
+          <TelemetryHistoryChart
+            pondId={currentPond.id}
+            pondLabel={`${currentPond.code} • ${currentPond.name}`}
+          />
+        </div>
+      )}
 
       {/* Empty State khi chưa có thiết bị IoT */}
       {devices.length === 0 ? (

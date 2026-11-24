@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  PlayCircle, 
   Download, 
   Cpu, 
   Wind, 
@@ -26,6 +25,7 @@ import {
   formatLogTimestamp,
 } from '../utils/alertHelpers';
 import { evaluateWaterMetric } from '../utils/waterQualityThresholds';
+import { WaterQualityGaugeGrid } from './common/WaterQualityGaugeGrid';
 
 const buildPondWaterMetrics = (pond) => [
   {
@@ -91,6 +91,7 @@ export const DashboardView = ({
   farms = [],
   selectedFarmId = 'all',
   ponds = [],
+  activePond = null,
   logs = [],
   isLoading = false,
   alertRefreshKey = 0,
@@ -99,14 +100,11 @@ export const DashboardView = ({
   onRefillFeed,
   onTogglePondPause,
   onRunTestFeeder,
-  onMuteAlarm,
   onShowToast,
 }) => {
-  const [testingAll, setTestingAll] = useState(false);
-  const [testCountdown, setTestCountdown] = useState(10);
   const [viewMode, setViewMode] = useState('grid');
+  const [showSvgGauges, setShowSvgGauges] = useState(true);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const testIntervalRef = useRef(null);
 
   // Cảnh báo thời gian thực từ Backend (lọc đúng theo trang trại đang chọn)
   const [liveAlerts, setLiveAlerts] = useState([]);
@@ -182,7 +180,6 @@ export const DashboardView = ({
     }, 60000);
     return () => {
       clearInterval(clockTimer);
-      clearInterval(testIntervalRef.current);
     };
   }, []);
 
@@ -247,29 +244,7 @@ export const DashboardView = ({
   // Vòng tròn tiến độ thức ăn (r = 22, chu vi = 138.2)
   const ringCircumference = 138.2;
   const ringOffset = ringCircumference - (feedProgressPct / 100) * ringCircumference;
-
-  const handleTestAll = () => {
-    if (testingAll || ponds.length === 0) return;
-    setTestingAll(true);
-    setTestCountdown(10);
-    onShowToast(`Đang kích hoạt chạy thử tự động 10 giây trên ${ponds.length} ao nuôi...`, 'info');
-
-    if (testIntervalRef.current) {
-      clearInterval(testIntervalRef.current);
-    }
-    testIntervalRef.current = setInterval(() => {
-      setTestCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(testIntervalRef.current);
-          testIntervalRef.current = null;
-          setTestingAll(false);
-          onShowToast('Kiểm tra tự động 10s hoàn tất.', 'success');
-          return 10;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
+  const featuredPond = ponds.find((p) => p.id === activePond?.id) || ponds[0] || null;
 
   const handleExportLog = () => {
     const csvContent = [
@@ -383,16 +358,12 @@ export const DashboardView = ({
 
         <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <button
-            onClick={handleTestAll}
-            disabled={testingAll || ponds.length === 0}
-            className={`h-9 px-3.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              testingAll
-                ? 'bg-[#FEF3C7] text-[#B45309] border-amber-300'
-                : 'bg-white hover:bg-[#EFF4FF] text-[#006398] border-[#D3E4FE] shadow-2xs'
-            }`}
+            onClick={() => onNavigateTab('feeder')}
+            disabled={ponds.length === 0}
+            className="h-9 px-3.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed bg-white hover:bg-[#EFF4FF] text-[#006398] border-[#D3E4FE] shadow-2xs"
           >
-            <PlayCircle className={`w-4 h-4 ${testingAll ? 'animate-spin text-[#B45309]' : 'text-[#006398]'}`} />
-            <span>{testingAll ? `Đang thử nghiệm (${testCountdown}s)` : 'Rải thử toàn trại (10s)'}</span>
+            <SlidersHorizontal className="w-4 h-4 text-[#006398]" />
+            <span>Điều khiển Máy cho ăn</span>
           </button>
 
           <button
@@ -562,6 +533,37 @@ export const DashboardView = ({
           </div>
         </div>
       </div>
+
+      {/* 3.5. LƯỚI 6 VÒNG TRÒN TIẾN ĐỘ SVG ĐO CHẤT LƯỢNG NƯỚC */}
+      {featuredPond && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Waves className="w-4 h-4 text-[#006398]" />
+              <h2 className="text-sm font-bold text-[#0B1C30]">
+                Giám sát 6 chỉ số nước (SVG) — {featuredPond.code} ({featuredPond.name})
+              </h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onNavigateTab('iot', featuredPond.id)}
+                className="text-xs font-bold text-[#006398] hover:underline cursor-pointer"
+              >
+                Xem đồ thị lịch sử →
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSvgGauges((v) => !v)}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                {showSvgGauges ? 'Thu gọn' : 'Mở rộng'}
+              </button>
+            </div>
+          </div>
+          {showSvgGauges && <WaterQualityGaugeGrid pond={featuredPond} compact />}
+        </div>
+      )}
 
       {/* 4. DANH SÁCH GIÁM SÁT CHI TIẾT TỪNG AO NUÔI */}
       <div className="space-y-3">

@@ -11,7 +11,7 @@ import {
   Shield,
   ArrowRight
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 
 export const Sidebar = ({
   currentTab,
@@ -103,7 +103,7 @@ export const Sidebar = ({
         >
           <div className="flex items-center gap-2.5">
             <Clock className="w-4 h-4 shrink-0" />
-            <span>Lịch cho ăn tự động</span>
+            <span>Lịch cho ăn &amp; AI</span>
           </div>
         </button>
 

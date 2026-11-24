@@ -13,7 +13,7 @@ import {
   AlertCircle,
   Waves
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import { getErrorMessage } from '../../services/apiClient';
 
 export const RegisterPage = () => {

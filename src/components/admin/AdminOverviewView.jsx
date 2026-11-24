@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
   Warehouse, 
@@ -20,7 +20,7 @@ export const AdminOverviewView = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage('');
     try {
@@ -46,13 +46,20 @@ export const AdminOverviewView = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchAllData();
-    const interval = setInterval(fetchAllData, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    const timer = setTimeout(() => {
+      void fetchAllData();
+    }, 0);
+    const interval = setInterval(() => {
+      void fetchAllData();
+    }, 30000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
+  }, [fetchAllData]);
 
   return (
     <div className="space-y-6">

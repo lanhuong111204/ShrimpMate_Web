@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Cpu, RotateCw, AlertCircle, Plus, Unlink, CheckCircle2, Radio } from 'lucide-react';
 import { deviceService } from '../../services/deviceService';
 import { pondService } from '../../services/pondService';
@@ -15,37 +15,41 @@ export const ClaimDeviceModal = ({ isOpen, onClose, farmId, pond, onSuccess }) =
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
+  const pondId = pond?.id;
+
   // Tải danh sách thiết bị hiện có trong ao
-  const fetchPondDevices = async () => {
-    if (!farmId || !pond?.id) return;
+  const fetchPondDevices = useCallback(async () => {
+    if (!farmId || !pondId) return;
     setIsLoading(true);
     setErrorMessage('');
     try {
       // 1. Thử lấy từ chi tiết ao
-      const pondDetail = await pondService.getPondById(farmId, pond.id);
+      const pondDetail = await pondService.getPondById(farmId, pondId);
       if (pondDetail?.devices) {
         setAssignedDevices(pondDetail.devices);
       } else {
         // 2. Lấy tất cả thiết bị của Manager và lọc theo pondId
         const allDevices = await deviceService.getDevices();
         const devicesList = Array.isArray(allDevices) ? allDevices : (allDevices?.data || []);
-        setAssignedDevices(devicesList.filter((d) => d.pondId === pond.id));
+        setAssignedDevices(devicesList.filter((d) => d.pondId === pondId));
       }
     } catch (err) {
       console.warn('Lỗi tải thiết bị của ao:', err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [farmId, pondId]);
 
   useEffect(() => {
-    if (isOpen && pond) {
-      fetchPondDevices();
+    if (!isOpen || !pond) return undefined;
+    const timer = setTimeout(() => {
       setDeviceUid('');
       setErrorMessage('');
       setSuccessMessage('');
-    }
-  }, [isOpen, pond]);
+      void fetchPondDevices();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [isOpen, pond, fetchPondDevices]);
 
   if (!isOpen || !pond) return null;
 

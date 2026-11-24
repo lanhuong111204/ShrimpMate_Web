@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Play, 
   Pause, 
@@ -10,7 +10,8 @@ import {
   AlertCircle,
   RotateCw,
   Clock,
-  Sparkles
+  Sparkles,
+  Gauge
 } from 'lucide-react';
 import { feedingService } from '../services/feedingService';
 import { safetyRuleService } from '../services/safetyRuleService';
@@ -22,6 +23,7 @@ import { SystemClock } from './common/SystemClock';
 export const FeederControlView = ({
   ponds = [],
   selectedPond = null,
+  liveProgress = null,
   onSelectPond,
   onNavigateTab,
   onEmergencyStop,
@@ -31,7 +33,7 @@ export const FeederControlView = ({
   const feederDevice = selectedPond?.feederDevice || null;
   const hasFeeder = Boolean(feederDevice);
 
-  const [isPaused, setIsPaused] = useState(false);
+  const [modeOverride, setModeOverride] = useState(null);
   const [isStartingFeed, setIsStartingFeed] = useState(false);
   const [controlError, setControlError] = useState('');
   const [customKg, setCustomKg] = useState('5.0');
@@ -40,10 +42,11 @@ export const FeederControlView = ({
   const [safetyEvaluation, setSafetyEvaluation] = useState(null);
   const [isSafetyModalOpen, setIsSafetyModalOpen] = useState(false);
 
-  useEffect(() => {
-    setIsPaused(feederDevice?.mode === 'manual');
-    setControlError('');
-  }, [selectedPond?.id, feederDevice?.id, feederDevice?.mode]);
+  const serverIsPaused = feederDevice?.mode === 'manual';
+  const isPaused =
+    modeOverride && modeOverride.deviceId === feederDevice?.id
+      ? modeOverride.paused
+      : serverIsPaused;
 
   if (ponds.length === 0 || !selectedPond) {
     return (
@@ -190,12 +193,13 @@ export const FeederControlView = ({
     if (!feederDevice) return;
     setControlError('');
     const nextPaused = !isPaused;
-    setIsPaused(nextPaused);
+    setModeOverride({ deviceId: feederDevice.id, paused: nextPaused });
     try {
       await deviceService.updateDevice(feederDevice.id, {
         mode: nextPaused ? 'manual' : 'automatic',
       });
       await onRefreshData?.();
+      setModeOverride(null);
       onShowToast?.(
         nextPaused
           ? 'Đã chuyển máy cho ăn sang Chế độ thủ công (Tạm dừng).'
@@ -203,7 +207,7 @@ export const FeederControlView = ({
         'info'
       );
     } catch (err) {
-      setIsPaused(!nextPaused);
+      setModeOverride(null);
       setControlError(getErrorMessage(err, 'Không thể đổi chế độ hoạt động của thiết bị.'));
     }
   };
@@ -345,6 +349,39 @@ export const FeederControlView = ({
               </span>
             </div>
           </div>
+
+          {/* TIẾN ĐỘ PHÁT TRỰC TIẾP QUA WEBSOCKET (feeding:progress) */}
+          {(selectedPond.isFeeding || liveProgress) && (
+            <div className="w-full mb-3 p-3 rounded-xl bg-[#FFF8F5] border border-[#FDBA74] text-left space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-bold">
+                <span className="text-[#EA580C] flex items-center gap-1.5">
+                  <RotateCw className="w-3 h-3 animate-spin" />
+                  <span>Đang rải trực tiếp (MQTT/WS)</span>
+                </span>
+                <div className="flex items-center gap-1.5 font-mono-num">
+                  {liveProgress?.rpm !== undefined && liveProgress?.rpm !== null && (
+                    <span className="px-2 py-0.5 rounded-md bg-white border border-[#FDBA74] text-[#9D4300] inline-flex items-center gap-1">
+                      <Gauge className="w-3 h-3" />
+                      {liveProgress.rpm} RPM
+                    </span>
+                  )}
+                  <span className="text-[#EA580C]">
+                    {liveProgress?.progressPercent !== undefined && liveProgress?.progressPercent !== null
+                      ? `${Math.min(100, Math.round(Number(liveProgress.progressPercent)))}%`
+                      : 'Đang chạy'}
+                  </span>
+                </div>
+              </div>
+              {liveProgress?.progressPercent !== undefined && liveProgress?.progressPercent !== null && (
+                <div className="w-full h-2 bg-[#FFDBCA] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#EA580C] rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.round(Number(liveProgress.progressPercent)))}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* THÔNG SỐ TÓM TẮT DƯỚI VÒNG TRÒN */}
           <div className="w-full grid grid-cols-2 gap-3 pt-4 border-t border-slate-100 text-left">

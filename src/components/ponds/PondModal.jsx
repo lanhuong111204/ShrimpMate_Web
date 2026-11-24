@@ -20,20 +20,24 @@ export const PondModal = ({
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    if (pond) {
-      setSelectedFarmId(pond.farmId || farmId || farms[0]?.id || '');
-      setCode(pond.code || '');
-      setName(pond.name || '');
-      setAreaM2(pond.areaM2 || '');
-      setStatus(pond.status || 'active');
-    } else {
-      setSelectedFarmId(farmId || farms[0]?.id || '');
-      setCode('');
-      setName('');
-      setAreaM2('2500');
-      setStatus('active');
-    }
-    setErrorMessage('');
+    if (!isOpen) return undefined;
+    const timer = setTimeout(() => {
+      if (pond) {
+        setSelectedFarmId(pond.farmId || farmId || farms[0]?.id || '');
+        setCode(pond.code || '');
+        setName(pond.name || '');
+        setAreaM2(pond.areaM2 || '');
+        setStatus(pond.status || 'active');
+      } else {
+        setSelectedFarmId(farmId || farms[0]?.id || '');
+        setCode('');
+        setName('');
+        setAreaM2('2500');
+        setStatus('active');
+      }
+      setErrorMessage('');
+    }, 0);
+    return () => clearTimeout(timer);
   }, [pond, farmId, farms, isOpen]);
 
   if (!isOpen) return null;

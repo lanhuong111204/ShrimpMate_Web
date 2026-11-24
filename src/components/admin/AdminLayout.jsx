@@ -13,7 +13,7 @@ import {
   ChevronDown,
   Waves
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import AdminOverviewView from './AdminOverviewView';
 import AdminUsersView from './AdminUsersView';
 import AdminCatalogView from './AdminCatalogView';

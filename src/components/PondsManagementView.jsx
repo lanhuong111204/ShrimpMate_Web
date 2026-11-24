@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings2, 
   Clock, 
@@ -13,10 +13,11 @@ import {
   Shield,
   AlertCircle
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import { farmService } from '../services/farmService';
 import { pondService } from '../services/pondService';
 import { getErrorMessage } from '../services/apiClient';
+import { evaluateWaterMetric } from '../utils/waterQualityThresholds';
 import { FarmModal } from './ponds/FarmModal';
 import { PondModal } from './ponds/PondModal';
 import { ClaimDeviceModal } from './ponds/ClaimDeviceModal';
@@ -58,7 +59,7 @@ export const PondsManagementView = ({
   const [seasonTargetPond, setSeasonTargetPond] = useState(null);
 
   // 1. Tải danh sách trang trại thật của người dùng
-  const fetchFarms = async (preferredFarmId = null) => {
+  const fetchFarms = useCallback(async (preferredFarmId = null) => {
     setIsLoadingFarms(true);
     setErrorMessage('');
     try {
@@ -87,10 +88,10 @@ export const PondsManagementView = ({
     } finally {
       setIsLoadingFarms(false);
     }
-  };
+  }, []);
 
   // 2. Tải danh sách ao nuôi thuộc trang trại đang chọn
-  const fetchPonds = async (farmId) => {
+  const fetchPonds = useCallback(async (farmId) => {
     if (!farmId) {
       setApiPonds([]);
       return;
@@ -107,19 +108,25 @@ export const PondsManagementView = ({
     } finally {
       setIsLoadingPonds(false);
     }
-  };
-
-  useEffect(() => {
-    fetchFarms();
   }, []);
 
   useEffect(() => {
-    if (selectedFarm?.id) {
-      fetchPonds(selectedFarm.id);
-    } else {
-      setApiPonds([]);
-    }
-  }, [selectedFarm?.id]);
+    const timer = setTimeout(() => {
+      void fetchFarms();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchFarms]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (selectedFarm?.id) {
+        void fetchPonds(selectedFarm.id);
+      } else {
+        setApiPonds([]);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [selectedFarm?.id, fetchPonds]);
 
   // Ghép dữ liệu thực tế (telemetry, vụ nuôi, thiết bị) từ enrichedPonds vào danh sách ao của trang trại đang chọn
   const displayPonds = apiPonds.map((p) => {
@@ -428,35 +435,51 @@ export const PondsManagementView = ({
                     )}
                   </div>
 
-                  {/* 3 Chỉ số quan trắc thực tế từ Database */}
+                  {/* 3 Chỉ số quan trắc thực tế từ Database (đồng bộ màu theo ngưỡng BE) */}
                   <div className="grid grid-cols-3 gap-2 font-mono-num">
-                    <div className="p-3 rounded-xl bg-[#F0FDF4] border border-[#7CF994]/60 text-center">
-                      <div className="text-[10px] text-[#006E2D] font-bold">Oxy hòa tan (DO)</div>
-                      <div className="text-lg font-extrabold text-[#006E2D] mt-0.5">
-                        {pond.do !== null && pond.do !== undefined ? pond.do.toFixed(2) : '--'}
-                      </div>
-                      <div className="text-[10px] text-[#005320]">
-                        {pond.do !== null && pond.do !== undefined ? 'mg/L' : 'Chưa đo'}
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-[#FFF8F5] border border-[#FFDBCA] text-center">
-                      <div className="text-[10px] text-[#9D4300] font-bold">Nhiệt độ nước</div>
-                      <div className="text-lg font-extrabold text-[#9D4300] mt-0.5">
-                        {pond.temp !== null && pond.temp !== undefined ? pond.temp.toFixed(1) : '--'}
-                      </div>
-                      <div className="text-[10px] text-[#EA580C]">
-                        {pond.temp !== null && pond.temp !== undefined ? '°C' : 'Chưa đo'}
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-[#EFF4FF] border border-[#D3E4FE] text-center">
-                      <div className="text-[10px] text-[#006398] font-bold">Độ pH nước</div>
-                      <div className="text-lg font-extrabold text-[#006398] mt-0.5">
-                        {pond.ph !== null && pond.ph !== undefined ? pond.ph.toFixed(1) : '--'}
-                      </div>
-                      <div className="text-[10px] text-[#006398]">
-                        {pond.ph !== null && pond.ph !== undefined ? 'pH' : 'Chưa đo'}
-                      </div>
-                    </div>
+                    {[
+                      {
+                        key: 'dissolvedOxygenMgL',
+                        title: 'Oxy hòa tan (DO)',
+                        val: pond.do,
+                        dec: 2,
+                        unit: 'mg/L',
+                      },
+                      {
+                        key: 'temperatureC',
+                        title: 'Nhiệt độ nước',
+                        val: pond.temp,
+                        dec: 1,
+                        unit: '°C',
+                      },
+                      {
+                        key: 'ph',
+                        title: 'Độ pH nước',
+                        val: pond.ph,
+                        dec: 1,
+                        unit: 'pH',
+                      },
+                    ].map((metric) => {
+                      const evalMeta = evaluateWaterMetric(metric.key, metric.val);
+                      const hasVal = metric.val !== null && metric.val !== undefined;
+                      return (
+                        <div
+                          key={metric.key}
+                          className={`p-3 rounded-xl border text-center ${evalMeta.bgClass} ${evalMeta.borderClass}`}
+                          title={`${metric.title}: ${evalMeta.label}`}
+                        >
+                          <div className={`text-[10px] font-bold ${evalMeta.textClass}`}>
+                            {metric.title}
+                          </div>
+                          <div className={`text-lg font-extrabold mt-0.5 ${evalMeta.textClass}`}>
+                            {hasVal ? Number(metric.val).toFixed(metric.dec) : '--'}
+                          </div>
+                          <div className={`text-[10px] ${evalMeta.textClass} opacity-85`}>
+                            {hasVal ? `${metric.unit} • ${evalMeta.label}` : 'Chưa đo'}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Dải quản trị: Gán thiết bị & Vụ nuôi FCR */}

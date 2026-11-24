@@ -1,6 +1,6 @@
 /**
  * Quy ước ngưỡng chất lượng nước, mức độ cảnh báo, quyết định Safety Engine
- * và trạng thái thiết bị IoT theo Chương 7 tài liệu đặc tả ShrimpMate.
+ * và trạng thái thiết bị IoT — đồng bộ 100% với Backend WATER_QUALITY_THRESHOLDS.
  */
 
 export const WATER_QUALITY_LEVEL_STYLES = {
@@ -64,98 +64,148 @@ export const WATER_QUALITY_THRESHOLDS = {
   dissolvedOxygenMgL: {
     key: 'dissolvedOxygenMgL',
     label: 'Oxy hòa tan (DO)',
+    shortLabel: 'DO',
     unit: 'mg/L',
-    optimalRangeText: '≥ 5.0 mg/L',
-    warningRangeText: '3.5 – < 5.0 mg/L',
+    minScale: 0,
+    maxScale: 10,
+    decimals: 2,
+    optimalMin: 5.0,
+    warningMin: 4.0,
+    criticalMin: 3.5,
+    optimalRangeText: '≥ 4.0 mg/L (Tối ưu ≥ 5.0)',
+    warningRangeText: '3.5 – < 4.0 mg/L',
     dangerRangeText: '< 3.5 mg/L',
     evaluate: (raw) => {
       const v = toValidNumber(raw);
       if (v === null) return 'unknown';
-      if (v >= 5.0) return 'green';
-      if (v >= 3.5) return 'yellow';
-      return 'red';
+      if (v < 3.5) return 'red';
+      if (v < 4.0) return 'yellow';
+      return 'green';
     },
   },
   ph: {
     key: 'ph',
     label: 'Độ pH',
-    unit: 'pH',
-    optimalRangeText: '7.5 – 8.5',
-    warningRangeText: '7.0 – < 7.5 hoặc > 8.5 – 9.0',
+    shortLabel: 'pH',
+    unit: '',
+    minScale: 5.5,
+    maxScale: 10.0,
+    decimals: 2,
+    optimalMin: 7.5,
+    optimalMax: 8.5,
+    warningMin: 7.2,
+    warningMax: 8.8,
+    criticalMin: 7.0,
+    criticalMax: 9.0,
+    optimalRangeText: '7.2 – 8.8 (Tối ưu 7.5–8.5)',
+    warningRangeText: '7.0 – < 7.2 hoặc > 8.8 – 9.0',
     dangerRangeText: '< 7.0 hoặc > 9.0',
     evaluate: (raw) => {
       const v = toValidNumber(raw);
       if (v === null) return 'unknown';
-      if (v >= 7.5 && v <= 8.5) return 'green';
-      if ((v >= 7.0 && v < 7.5) || (v > 8.5 && v <= 9.0)) return 'yellow';
-      return 'red';
+      if (v < 7.0 || v > 9.0) return 'red';
+      if (v < 7.2 || v > 8.8) return 'yellow';
+      return 'green';
     },
   },
   temperatureC: {
     key: 'temperatureC',
     label: 'Nhiệt độ nước',
+    shortLabel: 'Nhiệt',
     unit: '°C',
-    optimalRangeText: '28 – 32 °C',
-    warningRangeText: '26 – < 28 hoặc > 32 – 34 °C',
-    dangerRangeText: '< 26 hoặc > 34 °C',
+    minScale: 18,
+    maxScale: 38,
+    decimals: 1,
+    optimalMin: 28.0,
+    optimalMax: 32.0,
+    warningMin: 26.0,
+    warningMax: 33.5,
+    criticalMin: 22.0,
+    criticalMax: 35.0,
+    optimalRangeText: '26 – 33.5 °C (Tối ưu 28–32)',
+    warningRangeText: '22 – < 26 hoặc > 33.5 – 35 °C',
+    dangerRangeText: '< 22 hoặc > 35 °C',
     evaluate: (raw) => {
       const v = toValidNumber(raw);
       if (v === null) return 'unknown';
-      if (v >= 28 && v <= 32) return 'green';
-      if ((v >= 26 && v < 28) || (v > 32 && v <= 34)) return 'yellow';
-      return 'red';
+      if (v < 22.0 || v > 35.0) return 'red';
+      if (v < 26.0 || v > 33.5) return 'yellow';
+      return 'green';
     },
   },
   salinityPpt: {
     key: 'salinityPpt',
     label: 'Độ mặn',
+    shortLabel: 'Mặn',
     unit: '‰',
-    optimalRangeText: '10 – 25 ‰',
-    warningRangeText: '5 – < 10 hoặc > 25 – 30 ‰',
-    dangerRangeText: '< 5 hoặc > 30 ‰',
+    minScale: 0,
+    maxScale: 40,
+    decimals: 1,
+    optimalMin: 10.0,
+    optimalMax: 25.0,
+    warningMin: 5.0,
+    warningMax: 30.0,
+    criticalMin: 2.0,
+    criticalMax: 35.0,
+    optimalRangeText: '5 – 30 ‰ (Tối ưu 10–25)',
+    warningRangeText: '2 – < 5 hoặc > 30 – 35 ‰',
+    dangerRangeText: '< 2 hoặc > 35 ‰',
     evaluate: (raw) => {
       const v = toValidNumber(raw);
       if (v === null) return 'unknown';
-      if (v >= 10 && v <= 25) return 'green';
-      if ((v >= 5 && v < 10) || (v > 25 && v <= 30)) return 'yellow';
-      return 'red';
+      if (v < 2.0 || v > 35.0) return 'red';
+      if (v < 5.0 || v > 30.0) return 'yellow';
+      return 'green';
     },
   },
   ammoniaMgL: {
     key: 'ammoniaMgL',
     label: 'Khí độc NH₃',
+    shortLabel: 'NH₃',
     unit: 'mg/L',
-    optimalRangeText: '≤ 0.05 mg/L',
-    warningRangeText: '> 0.05 – 0.3 mg/L',
+    minScale: 0,
+    maxScale: 0.5,
+    decimals: 3,
+    optimalMax: 0.05,
+    warningMax: 0.1,
+    criticalMax: 0.3,
+    optimalRangeText: '≤ 0.1 mg/L (Tối ưu ≤ 0.05)',
+    warningRangeText: '> 0.1 – 0.3 mg/L',
     dangerRangeText: '> 0.3 mg/L',
     evaluate: (raw) => {
       const v = toValidNumber(raw);
       if (v === null) return 'unknown';
       if (v > 0.3) return 'red';
-      if (v > 0.05) return 'yellow';
+      if (v > 0.1) return 'yellow';
       return 'green';
     },
   },
   turbidityNtu: {
     key: 'turbidityNtu',
     label: 'Độ đục',
+    shortLabel: 'Đục',
     unit: 'NTU',
+    minScale: 0,
+    maxScale: 100,
+    decimals: 1,
     optimalMin: 20,
     optimalMax: 40,
     warningMax: 60,
     criticalMax: 80,
-    optimalRangeText: '20 – 40 NTU',
-    warningRangeText: '< 20 hoặc > 40 – 80 NTU',
+    optimalRangeText: '≤ 60 NTU (Tối ưu 20–40)',
+    warningRangeText: '> 60 – 80 NTU',
     dangerRangeText: '> 80 NTU',
     evaluate: (raw) => {
       const v = toValidNumber(raw);
       if (v === null) return 'unknown';
-      if (v > 80) return 'red';
-      if (v >= 20 && v <= 40) return 'green';
-      return 'yellow';
+      if (v > 80.0) return 'red';
+      if (v > 60.0) return 'yellow';
+      return 'green';
     },
   },
 };
+
+export const WATER_METRIC_META = Object.values(WATER_QUALITY_THRESHOLDS);
 
 const METRIC_ALIASES = {
   do: 'dissolvedOxygenMgL',

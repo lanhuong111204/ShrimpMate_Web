@@ -8,6 +8,7 @@ import {
   RotateCcw,
   Building2,
 } from 'lucide-react';
+import { evaluateWaterMetric } from '../utils/waterQualityThresholds';
 
 export const IoTStationView = ({
   devices = [],
@@ -25,9 +26,6 @@ export const IoTStationView = ({
       case 'sensor_node':
       case 'sensor_station':
         return 'Trạm cảm biến môi trường';
-      case 'camera':
-      case 'camera_fis':
-        return 'Camera AI giám sát nhá';
       case 'edge_gateway':
         return 'Bộ thu phát trung tâm (Edge Gateway)';
       case 'aerator':
@@ -44,8 +42,7 @@ export const IoTStationView = ({
       case 'sensor_node':
       case 'sensor_station':
         return '#006398';
-      case 'camera':
-      case 'camera_fis':
+      case 'edge_gateway':
         return '#006E2D';
       default:
         return '#40A2E7';
@@ -92,7 +89,7 @@ export const IoTStationView = ({
             Chưa có thiết bị IoT nào được gán cho trang trại của bạn
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
-            Khi quản trị viên đăng ký và gán máy cho ăn tự động, trạm cảm biến hoặc camera AI vào ao nuôi của bạn, thông số kết nối thực tế sẽ hiển thị tại đây.
+            Khi quản trị viên đăng ký và gán máy cho ăn tự động, trạm cảm biến môi trường hoặc bộ thu phát trung tâm vào ao nuôi của bạn, thông số kết nối thực tế sẽ hiển thị tại đây.
           </p>
           {onNavigateTab && (
             <button
@@ -179,6 +176,40 @@ export const IoTStationView = ({
                     <strong className="text-[#EA580C] font-mono-num">{latencyText}</strong>
                   </div>
                 </div>
+
+                {(dev.type === 'sensor_node' || dev.type === 'sensor_station') &&
+                  assignedPond?.hasTelemetry && (
+                    <div className="pt-3 border-t border-slate-100 space-y-2">
+                      <div className="text-[11px] font-bold text-slate-500">
+                        6 chỉ số nước trực tuyến ({assignedPond.code})
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[
+                          { key: 'dissolvedOxygenMgL', short: 'DO', val: assignedPond.do, unit: 'mg/L', dec: 2 },
+                          { key: 'ph', short: 'pH', val: assignedPond.ph, unit: '', dec: 1 },
+                          { key: 'temperatureC', short: 'Nhiệt', val: assignedPond.temp, unit: '°C', dec: 1 },
+                          { key: 'salinityPpt', short: 'Mặn', val: assignedPond.salinity, unit: '‰', dec: 1 },
+                          { key: 'ammoniaMgL', short: 'NH₃', val: assignedPond.nh3, unit: 'mg/L', dec: 2 },
+                          { key: 'turbidityNtu', short: 'Đục', val: assignedPond.turbidity, unit: 'NTU', dec: 1 },
+                        ].map((m) => {
+                          const evalRes = evaluateWaterMetric(m.key, m.val);
+                          const display =
+                            m.val !== null && m.val !== undefined
+                              ? `${Number(m.val).toFixed(m.dec)}${m.unit ? ` ${m.unit}` : ''}`
+                              : '--';
+                          return (
+                            <div
+                              key={m.key}
+                              className={`px-2 py-1 rounded-lg border text-[10px] font-mono-num flex flex-col items-center ${evalRes.bgClass} ${evalRes.borderClass} ${evalRes.textClass}`}
+                            >
+                              <span className="font-semibold opacity-80">{m.short}</span>
+                              <span className="font-bold">{display}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
               </div>
             );
           })}

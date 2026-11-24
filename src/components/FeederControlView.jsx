@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Pause, 
@@ -21,6 +21,7 @@ import { safetyRuleService } from '../services/safetyRuleService';
 import { deviceService } from '../services/deviceService';
 import { getErrorMessage } from '../services/apiClient';
 import { SafetyBlockedModal } from './feeder/SafetyBlockedModal';
+import { SystemClock } from './common/SystemClock';
 
 export const FeederControlView = ({
   ponds = [],
@@ -30,7 +31,6 @@ export const FeederControlView = ({
   onEmergencyStop,
   onShowToast,
   onRefreshData,
-  currentTime,
 }) => {
   const feederDevice = selectedPond?.feederDevice || null;
   const hasFeeder = Boolean(feederDevice);
@@ -70,6 +70,22 @@ export const FeederControlView = ({
   // Đánh giá quy tắc an toàn
   const [safetyEvaluation, setSafetyEvaluation] = useState(null);
   const [isSafetyModalOpen, setIsSafetyModalOpen] = useState(false);
+
+  const testIntervalRef = useRef(null);
+  const reverseTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (testIntervalRef.current) {
+        clearInterval(testIntervalRef.current);
+        testIntervalRef.current = null;
+      }
+      if (reverseTimeoutRef.current) {
+        clearTimeout(reverseTimeoutRef.current);
+        reverseTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     setIsPaused(feederDevice?.mode === 'manual');
@@ -219,10 +235,14 @@ export const FeederControlView = ({
     setTestCountdown(10);
     onShowToast?.('Đang bật mâm phun thử 10 giây để kiểm tra bán kính văng.', 'info');
 
-    const interval = setInterval(() => {
+    if (testIntervalRef.current) {
+      clearInterval(testIntervalRef.current);
+    }
+    testIntervalRef.current = setInterval(() => {
       setTestCountdown((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
+          clearInterval(testIntervalRef.current);
+          testIntervalRef.current = null;
           setIsTestSpinning(false);
           onShowToast?.('Kiểm tra mâm phun 10s hoàn tất.', 'success');
           return 10;
@@ -262,7 +282,11 @@ export const FeederControlView = ({
     if (!feederDevice || isReversing) return;
     setIsReversing(true);
     onShowToast?.('Đang kích hoạt đảo chiều mâm 3 giây để chống kẹt cám.', 'info');
-    setTimeout(() => {
+    if (reverseTimeoutRef.current) {
+      clearTimeout(reverseTimeoutRef.current);
+    }
+    reverseTimeoutRef.current = setTimeout(() => {
+      reverseTimeoutRef.current = null;
       setIsReversing(false);
       onShowToast?.('Đảo chiều mâm hoàn tất.', 'success');
     }, 3000);
@@ -724,7 +748,7 @@ export const FeederControlView = ({
                   : '--'}
               </div>
               <div className="text-xs text-[#006E2D] font-semibold mt-1">
-                Đồng hồ: {currentTime}
+                Đồng hồ: <SystemClock />
               </div>
             </div>
 

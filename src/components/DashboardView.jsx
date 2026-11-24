@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   PlayCircle, 
   Download, 
@@ -25,6 +25,67 @@ import {
   getSeverityMeta,
   formatLogTimestamp,
 } from '../utils/alertHelpers';
+import { evaluateWaterMetric } from '../utils/waterQualityThresholds';
+
+const buildPondWaterMetrics = (pond) => [
+  {
+    key: 'dissolvedOxygenMgL',
+    label: 'Oxy (DO)',
+    shortLabel: 'DO',
+    value: pond.do,
+    formatted: pond.do !== null && pond.do !== undefined ? pond.do.toFixed(2) : '--',
+    unit: 'mg/L',
+  },
+  {
+    key: 'ph',
+    label: 'Độ pH',
+    shortLabel: 'pH',
+    value: pond.ph,
+    formatted: pond.ph !== null && pond.ph !== undefined ? pond.ph.toFixed(1) : '--',
+    unit: '',
+  },
+  {
+    key: 'temperatureC',
+    label: 'Nhiệt độ',
+    shortLabel: 'Nhiệt',
+    value: pond.temp,
+    formatted: pond.temp !== null && pond.temp !== undefined ? pond.temp.toFixed(1) : '--',
+    unit: '°C',
+  },
+  {
+    key: 'salinityPpt',
+    label: 'Độ mặn',
+    shortLabel: 'Mặn',
+    value: pond.salinity,
+    formatted: pond.salinity !== null && pond.salinity !== undefined ? pond.salinity.toFixed(1) : '--',
+    unit: '‰',
+  },
+  {
+    key: 'ammoniaMgL',
+    label: 'Khí độc NH₃',
+    shortLabel: 'NH₃',
+    value: pond.nh3,
+    formatted: pond.nh3 !== null && pond.nh3 !== undefined ? pond.nh3.toFixed(2) : '--',
+    unit: 'mg/L',
+  },
+  {
+    key: 'turbidityNtu',
+    label: 'Độ đục',
+    shortLabel: 'Đục',
+    value: pond.turbidity,
+    formatted: pond.turbidity !== null && pond.turbidity !== undefined ? pond.turbidity.toFixed(1) : '--',
+    unit: 'NTU',
+  },
+];
+
+const getTelemetryStaleMinutes = (measuredAt, nowMs) => {
+  if (!measuredAt) return 0;
+  const measuredMs = new Date(measuredAt).getTime();
+  if (!Number.isFinite(measuredMs) || nowMs - measuredMs <= 30 * 60 * 1000) {
+    return 0;
+  }
+  return Math.floor((nowMs - measuredMs) / 60000);
+};
 
 export const DashboardView = ({
   farms = [],
@@ -44,6 +105,8 @@ export const DashboardView = ({
   const [testingAll, setTestingAll] = useState(false);
   const [testCountdown, setTestCountdown] = useState(10);
   const [viewMode, setViewMode] = useState('grid');
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const testIntervalRef = useRef(null);
 
   // Cảnh báo thời gian thực từ Backend (lọc đúng theo trang trại đang chọn)
   const [liveAlerts, setLiveAlerts] = useState([]);
@@ -51,7 +114,7 @@ export const DashboardView = ({
 
   const pondIdsKey = ponds.map((p) => p.id).join(',');
 
-  const fetchAlerts = React.useCallback(async () => {
+  const fetchAlerts = useCallback(async () => {
     try {
       const pondIdList = pondIdsKey ? pondIdsKey.split(',').filter(Boolean) : [];
 
@@ -102,7 +165,7 @@ export const DashboardView = ({
     }
   }, [selectedFarmId, pondIdsKey]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const initialTimer = setTimeout(() => {
       fetchAlerts();
     }, 0);
@@ -112,6 +175,16 @@ export const DashboardView = ({
       clearInterval(timer);
     };
   }, [fetchAlerts, alertRefreshKey]);
+
+  useEffect(() => {
+    const clockTimer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 60000);
+    return () => {
+      clearInterval(clockTimer);
+      clearInterval(testIntervalRef.current);
+    };
+  }, []);
 
   const handleAcknowledgeAlert = async (id) => {
     try {
@@ -180,10 +253,14 @@ export const DashboardView = ({
     setTestCountdown(10);
     onShowToast(`Đang kích hoạt chạy thử tự động 10 giây trên ${ponds.length} ao nuôi...`, 'info');
 
-    const interval = setInterval(() => {
+    if (testIntervalRef.current) {
+      clearInterval(testIntervalRef.current);
+    }
+    testIntervalRef.current = setInterval(() => {
       setTestCountdown((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
+          clearInterval(testIntervalRef.current);
+          testIntervalRef.current = null;
           setTestingAll(false);
           onShowToast('Kiểm tra tự động 10s hoàn tất.', 'success');
           return 10;
@@ -210,6 +287,7 @@ export const DashboardView = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
     onShowToast('Đã xuất báo cáo nhật ký vận hành ra tệp CSV thành công.', 'success');
   };
 
@@ -287,7 +365,7 @@ export const DashboardView = ({
             Tổng quan vận hành trang trại
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Số liệu thực tế từ cơ sở dữ liệu: lượng thức ăn, 6 chỉ số môi trường nước và sức ăn từng ao nuôi.
+            Số liệu thực tế từ cơ sở dữ liệu: lượng thức ăn, 6 chỉ số môi trường nước và trạng thái thiết bị từng ao nuôi.
           </p>
         </div>
 
@@ -545,6 +623,8 @@ export const DashboardView = ({
                 pond.targetKg > 0
                   ? Math.min(100, Math.round((pond.sprayedKg / pond.targetKg) * 100))
                   : 0;
+              const staleMinutes = getTelemetryStaleMinutes(pond.telemetryMeasuredAt, nowMs);
+              const waterMetrics = buildPondWaterMetrics(pond);
 
               return (
                 <div
@@ -610,44 +690,40 @@ export const DashboardView = ({
                     </div>
                   </div>
 
-                  {/* 4 ô chỉ số cảm biến thực tế */}
-                  <div className="grid grid-cols-4 gap-2 mb-4">
-                    <div
-                      className={`p-2.5 rounded-xl border text-center ${
-                        pond.do === null
-                          ? 'bg-slate-50 border-slate-200'
-                          : pond.do >= 5.0
-                          ? 'bg-[#F0FDF4] border-[#7CF994]/60'
-                          : 'bg-[#FEF3C7]/50 border-amber-200'
-                      }`}
-                    >
-                      <p className="text-[10px] font-bold text-[#006E2D]">Oxy (DO)</p>
-                      <p className="text-sm font-extrabold font-mono-num mt-0.5 text-[#006E2D]">
-                        {pond.do !== null ? `${pond.do.toFixed(2)}` : '--'}{' '}
-                        <span className="text-[10px] font-normal">mg/L</span>
-                      </p>
+                  {staleMinutes > 0 && (
+                    <div className="mb-2.5 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-[#92400E] text-[11px] font-semibold">
+                      <span className="inline-flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-[#D97706] shrink-0" />
+                        <span>Cảm biến trễ {staleMinutes} phút</span>
+                      </span>
+                      <span className="font-mono-num text-[10px] opacity-80">
+                        {formatLogTimestamp(pond.telemetryMeasuredAt)}
+                      </span>
                     </div>
+                  )}
 
-                    <div className="p-2.5 rounded-xl bg-[#EFF4FF] border border-[#D3E4FE] text-center">
-                      <p className="text-[10px] font-bold text-[#006398]">Độ pH</p>
-                      <p className="text-sm font-extrabold text-[#006398] font-mono-num mt-0.5">
-                        {pond.ph !== null ? pond.ph.toFixed(1) : '--'}
-                      </p>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-[#FFF8F5] border border-[#FFDBCA] text-center">
-                      <p className="text-[10px] font-bold text-[#9D4300]">Nhiệt độ</p>
-                      <p className="text-sm font-extrabold text-[#9D4300] font-mono-num mt-0.5">
-                        {pond.temp !== null ? `${pond.temp.toFixed(1)}°C` : '--'}
-                      </p>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl border text-center bg-[#E8F5E9] border-[#7CF994]">
-                      <p className="text-[10px] font-bold text-[#006E2D]">Độ thèm ăn</p>
-                      <p className="text-xs font-extrabold mt-1 truncate text-[#006E2D]">
-                        {pond.fisLabel}
-                      </p>
-                    </div>
+                  {/* 6 ô chỉ số chất lượng nước theo ngưỡng thực tế */}
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    {waterMetrics.map((metric) => {
+                      const evalMeta = evaluateWaterMetric(metric.key, metric.value);
+                      return (
+                        <div
+                          key={metric.key}
+                          className={`p-2 rounded-xl border text-center ${evalMeta.bgClass} ${evalMeta.borderClass}`}
+                          title={`${metric.label}: ${evalMeta.label}`}
+                        >
+                          <p className={`text-[10px] font-bold ${evalMeta.textClass}`}>
+                            {metric.label}
+                          </p>
+                          <p className={`text-sm font-extrabold font-mono-num mt-0.5 ${evalMeta.textClass}`}>
+                            {metric.formatted}
+                            {metric.unit ? (
+                              <span className="text-[10px] font-normal ml-0.5">{metric.unit}</span>
+                            ) : null}
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Thanh tiến độ rải cám */}
@@ -719,7 +795,7 @@ export const DashboardView = ({
                     <th className="py-3.5 px-4">Trang trại</th>
                     <th className="py-3.5 px-4">Ao nuôi</th>
                     <th className="py-3.5 px-4">Trạng thái</th>
-                    <th className="py-3.5 px-4">Môi trường (DO / pH / Nhiệt)</th>
+                    <th className="py-3.5 px-4">6 Chỉ số môi trường</th>
                     <th className="py-3.5 px-4">Tiến độ thức ăn</th>
                     <th className="py-3.5 px-4">Tồn phễu</th>
                     <th className="py-3.5 px-4 text-right">Thao tác nhanh</th>
@@ -731,6 +807,8 @@ export const DashboardView = ({
                       pond.targetKg > 0
                         ? Math.min(100, Math.round((pond.sprayedKg / pond.targetKg) * 100))
                         : 0;
+                    const staleMinutes = getTelemetryStaleMinutes(pond.telemetryMeasuredAt, nowMs);
+                    const waterMetrics = buildPondWaterMetrics(pond);
 
                     return (
                       <tr key={pond.id} className="hover:bg-[#F8F9FF] transition">
@@ -760,20 +838,28 @@ export const DashboardView = ({
                           </div>
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap">{renderStatusBadge(pond)}</td>
-                        <td className="py-3.5 px-4 whitespace-nowrap font-mono-num text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-[#006E2D]">
-                              {pond.do !== null ? `${pond.do.toFixed(2)} mg/L` : '--'}
-                            </span>
-                            <span className="text-slate-300">|</span>
-                            <span className="text-[#006398] font-bold">
-                              pH {pond.ph !== null ? pond.ph.toFixed(1) : '--'}
-                            </span>
-                            <span className="text-slate-300">|</span>
-                            <span className="text-[#9D4300] font-bold">
-                              {pond.temp !== null ? `${pond.temp.toFixed(1)}°C` : '--'}
-                            </span>
+                        <td className="py-3.5 px-4 font-mono-num text-[11px] min-w-[260px]">
+                          <div className="grid grid-cols-3 gap-1">
+                            {waterMetrics.map((metric) => {
+                              const evalMeta = evaluateWaterMetric(metric.key, metric.value);
+                              return (
+                                <span
+                                  key={metric.key}
+                                  className={`px-1.5 py-0.5 rounded border font-semibold text-center whitespace-nowrap ${evalMeta.bgClass} ${evalMeta.borderClass} ${evalMeta.textClass}`}
+                                  title={`${metric.label}: ${evalMeta.label}`}
+                                >
+                                  {metric.shortLabel}: {metric.formatted}
+                                  {metric.unit ? ` ${metric.unit}` : ''}
+                                </span>
+                              );
+                            })}
                           </div>
+                          {staleMinutes > 0 && (
+                            <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[#92400E] font-sans text-[10px] font-semibold">
+                              <AlertTriangle className="w-3 h-3 text-[#D97706]" />
+                              <span>Cảm biến trễ {staleMinutes} phút</span>
+                            </div>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 min-w-[160px]">
                           <div className="flex justify-between text-xs font-mono-num mb-1">
@@ -866,6 +952,11 @@ export const DashboardView = ({
                   ? `${alertItem.pond.code} • ${alertItem.pond.name}`
                   : alertItem.pond.code
                 : '';
+              const recommendationText =
+                alertItem.aiRecommendation?.explanation ||
+                alertItem.metadata?.actionRecommendation;
+              const latestValue = alertItem.metadata?.latestValue;
+              const repeatCount = Number(alertItem.metadata?.repeatCount || 0);
 
               return (
                 <div
@@ -907,10 +998,28 @@ export const DashboardView = ({
                         </div>
                       )}
 
-                      {alertItem.metadata?.actionRecommendation && (
-                        <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-white/85 border border-slate-200 text-[#0B1C30] text-[11px] mt-1">
-                          <Lightbulb className="w-3.5 h-3.5 text-[#EA580C] shrink-0 mt-0.5" />
-                          <span>{alertItem.metadata.actionRecommendation}</span>
+                      {((latestValue !== null && latestValue !== undefined) || repeatCount > 1) && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {latestValue !== null && latestValue !== undefined && (
+                            <span className="px-2 py-0.5 rounded-full bg-white border border-slate-200 text-[#0B1C30] font-mono-num font-bold text-[10px]">
+                              Giá trị đo: {latestValue}
+                              {alertItem.metadata?.unit ? ` ${alertItem.metadata.unit}` : ''}
+                            </span>
+                          )}
+                          {repeatCount > 1 && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-[#92400E] font-mono-num font-bold text-[10px]">
+                              Lặp lại lần #{repeatCount}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {recommendationText && (
+                        <div className="flex items-start gap-1.5 px-2.5 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-[11px] mt-1">
+                          <Lightbulb className="w-3.5 h-3.5 text-[#D97706] shrink-0 mt-0.5" />
+                          <span>
+                            <strong>Khuyến nghị:</strong> {recommendationText}
+                          </span>
                         </div>
                       )}
                     </div>

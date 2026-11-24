@@ -136,6 +136,25 @@ export const WATER_QUALITY_THRESHOLDS = {
       return 'green';
     },
   },
+  turbidityNtu: {
+    key: 'turbidityNtu',
+    label: 'Độ đục',
+    unit: 'NTU',
+    optimalMin: 20,
+    optimalMax: 40,
+    warningMax: 60,
+    criticalMax: 80,
+    optimalRangeText: '20 – 40 NTU',
+    warningRangeText: '< 20 hoặc > 40 – 80 NTU',
+    dangerRangeText: '> 80 NTU',
+    evaluate: (raw) => {
+      const v = toValidNumber(raw);
+      if (v === null) return 'unknown';
+      if (v > 80) return 'red';
+      if (v >= 20 && v <= 40) return 'green';
+      return 'yellow';
+    },
+  },
 };
 
 const METRIC_ALIASES = {
@@ -151,6 +170,8 @@ const METRIC_ALIASES = {
   nh3: 'ammoniaMgL',
   ammonia: 'ammoniaMgL',
   ammoniaMgL: 'ammoniaMgL',
+  turbidity: 'turbidityNtu',
+  turbidityNtu: 'turbidityNtu',
 };
 
 export const resolveWaterMetricConfig = (metricKey) => {
@@ -181,6 +202,8 @@ export const evaluateWaterQuality = (metricKey, value) => {
     numericValue: toValidNumber(value),
   };
 };
+
+export const evaluateWaterMetric = evaluateWaterQuality;
 
 export const getWaterQualityColor = (metricKey, value) => {
   const level = getWaterQualityLevel(metricKey, value);

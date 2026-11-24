@@ -27,6 +27,13 @@ export const adminService = {
     return await apiClient.get('/admin/reports/fcr');
   },
 
+  /**
+   * Kiểm tra trạng thái hoạt động của dịch vụ AI
+   */
+  getAiServiceStatus: async () => {
+    return await apiClient.get('/admin/ai-service-status');
+  },
+
   // ================= 2. QUẢN LÝ TÀI KHOẢN TOÀN HỆ THỐNG =================
   /**
    * Xem danh sách tất cả tài khoản trong hệ thống
